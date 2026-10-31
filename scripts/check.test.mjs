@@ -58,8 +58,15 @@ test("every image the Dockerfile pulls must be pinned by digest", () => {
 test("an icon with a script, a link or an external reference fails", () => {
   const icon = (svg) => mutated("discord-bot-js", () => svg, "icon.svg");
   const wrap = (inner) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${inner}</svg>`;
-  assert.match(icon(wrap("<![CDATA[<!--]]><script>alert(1)</script><!---->")), /CDATA section or a malformed comment/);
-  assert.match(icon(wrap("<!-- --!><script>alert(1)</script> -->")), /CDATA section or a malformed comment/);
+  const differential = /CDATA section, a malformed comment or `<` in an attribute/;
+  for (const inner of [
+    "<![CDATA[<!--]]><script>alert(1)</script><!---->",
+    "<!-- --!><script>alert(1)</script> -->",
+    "<!--><script>alert(1)</script><!-- -->",
+    "<!---><script>alert(1)</script><!-- -->",
+    "<path d=\"<!--\"/><script>alert(1)</script><!-- -->",
+    "<path d='<!--'/><script>alert(1)</script><!-- -->",
+  ]) assert.match(icon(wrap(inner)), differential, inner);
   assert.match(icon(wrap('<x:script xmlns:x="http://www.w3.org/2000/svg">alert(1)</x:script>')), /element <x:script>/);
   assert.match(icon(wrap('<path d="M0 0" x:onload="alert(1)"/>')), /event handler/);
   assert.match(icon(wrap('<animate attributeName="href" to="#a"/>')), /animates a link/);
