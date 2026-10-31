@@ -1,0 +1,17 @@
+{
+  "name": "openmausbot-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "OpenMausBot server packaged for Vertra Cloud (npm packages, versions pinned in package-lock.json).",
+  "scripts": {
+    "start": "sh start.sh"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-code": "2.1.316",
+    "@openai/codex": "0.166.0",
+    "openmausbot": "0.1.134"
+  }
+}

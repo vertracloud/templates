@@ -6,5 +6,6 @@
   "n8n": { "origin": "vertra", "featured": true },
   "open-webui": { "origin": "vertra" },
   "openclaw": { "origin": "vertra", "featured": true },
+  "openmausbot": { "origin": "vertra" },
   "uptime-kuma": { "origin": "vertra" }
 }

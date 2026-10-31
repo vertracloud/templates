@@ -1,0 +1,51 @@
+id: openmausbot
+version: 1.0.0
+name: { pt-br: OpenMausBot, en: OpenMausBot, es: OpenMausBot }
+description:
+  pt-br: Chat em que cada contato é um agente Claude Code ou Codex, com memória e rotinas. Entre com a sua conta.
+  en: A chat app where every contact is a Claude Code or Codex agent, with memory and routines. Sign in with your account.
+  es: Un chat donde cada contacto es un agente Claude Code o Codex, con memoria y rutinas. Entra con tu cuenta.
+category: ai-agents
+tags: [ai, agent, chat, claude, codex, assistant, routines]
+icon: icon.svg
+byok: true
+links:
+  website: https://www.openmausbot.com
+  docs: https://github.com/milind-soni/OpenMausBot/blob/main/docs/self-hosting.md
+  source: https://github.com/milind-soni/OpenMausBot
+  license: https://github.com/milind-soni/OpenMausBot/blob/main/LICENSE   # Apache-2.0
+
+services:
+  app:
+    source: { type: code, path: src }
+    language: javascript
+    runtime_version: "24.22.1"
+    main: start.sh
+    start: sh start.sh
+    ram: { min: 2048, recommended: 3072 }
+    web: required
+    env:
+      PUBLIC_ORIGIN: "{{app.url}}"
+    healthcheck: { path: /api/health, timeout: 180 }
+    deploy:
+      zero_downtime: { default: off, locked: true }   # a second copy on the same data folder is refused
+      auto_rollback: { default: true }
+      rollback: { with_data: required }   # local databases are migrated on upgrade
+
+permissions:
+  code: { view: true, edit: false }
+  ram: { change: true, below_min: false, above_max: true }
+
+outputs:
+  - label: { pt-br: Endereço, en: Address, es: Dirección }
+    value: "{{app.url}}"
+  - label: { pt-br: Como entrar (pareamento), en: How to sign in (pairing), es: Cómo entrar (emparejamiento) }
+    value:
+      pt-br: "Não há senha. Abra o log do app e copie o código da linha \"pairing code\" (12 caracteres, uso único, vale 5 min). Abra o endereço acima, digite o código e confirme. Cada reinício do app imprime um código novo."
+      en: "There is no password. Open the app log and copy the code on the \"pairing code\" line (12 characters, single use, valid for 5 min). Open the address above, type the code and confirm. Every restart of the app prints a new code."
+      es: "No hay contraseña. Abre el log de la app y copia el código de la línea \"pairing code\" (12 caracteres, un solo uso, vale 5 min). Abre la dirección de arriba, escribe el código y confirma. Cada reinicio de la app imprime un código nuevo."
+  - label: { pt-br: Conectar Claude e Codex, en: Connect Claude and Codex, es: Conectar Claude y Codex }
+    value:
+      pt-br: "Depois de entrar: Configurações > IA > Engines. Claude: entre pela conta e cole de volta o código que a Anthropic mostrar. Codex: entre com o ChatGPT pelo código de dispositivo. Os logins ficam no disco do app e sobrevivem a reinícios."
+      en: "After signing in: Settings > AI > Engines. Claude: sign in with your account and paste back the code Anthropic shows. Codex: sign in with ChatGPT using the device code. The logins stay on the app disk and survive restarts."
+      es: "Después de entrar: Configuración > IA > Engines. Claude: entra con tu cuenta y pega de vuelta el código que muestre Anthropic. Codex: entra con ChatGPT mediante el código de dispositivo. Los inicios de sesión quedan en el disco de la app y sobreviven a los reinicios."
