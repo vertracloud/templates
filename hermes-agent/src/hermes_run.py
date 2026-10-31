@@ -1,5 +1,4 @@
-"""Runs the Hermes CLI. Hermes looks for Node.js only in its own package store, which this template does not use, so when
-VERTRA_NODE_BIN is set the Node lookups point at that folder instead."""
+"""Runs the Hermes CLI with its Node.js lookups pointed at VERTRA_NODE_BIN (Hermes only searches its own package store)."""
 import os
 import runpy
 import shutil
