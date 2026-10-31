@@ -12,6 +12,7 @@ The catalog of one-click templates for [Vertra Cloud](https://vertracloud.app): 
 |---|---|---|
 | [`n8n`](n8n/) | code (Node.js 24) | Workflow automation; Code node in JavaScript, queue mode, community nodes |
 | [`openclaw`](openclaw/) | code (Node.js 24) | Personal AI assistant with browser, panel and channels |
+| [`openmausbot`](openmausbot/) | code (Node.js 24) | Chat app of Claude Code and Codex agents with memory and routines |
 | [`hermes-agent`](hermes-agent/) | code (Python 3.14) | AI agent with browser chat and channels |
 | [`evolution-api`](evolution-api/) | image (own Dockerfile) | WhatsApp API with Postgres |
 | [`open-webui`](open-webui/) | image (own Dockerfile) | AI chat interface (bring your own key) |

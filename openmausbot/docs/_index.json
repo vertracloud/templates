@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "pages": [
+    {
+      "id": "first-steps",
+      "title": { "pt-br": "Primeiros passos", "en": "First steps", "es": "Primeros pasos" },
+      "files": { "pt-br": "first-steps.md", "en": "first-steps.en.md", "es": "first-steps.es.md" }
+    },
+    {
+      "id": "reference",
+      "title": {
+        "pt-br": "Referência: arquivos, variáveis e problemas comuns",
+        "en": "Reference: files, variables and common problems",
+        "es": "Referencia: archivos, variables y problemas comunes"
+      },
+      "files": { "pt-br": "reference.md", "en": "reference.en.md", "es": "reference.es.md" }
+    }
+  ]
+}
