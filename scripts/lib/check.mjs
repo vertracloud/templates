@@ -105,6 +105,8 @@ function decodeEntities(text) {
 function svgProblem(text) {
   if (!/<svg[\s>]/i.test(text)) return "is not an SVG";
   if (/<!(?:DOCTYPE|ENTITY)/i.test(text) || /<\?xml-stylesheet/i.test(text)) return "has a DOCTYPE, entities or a stylesheet reference";
+  // Comments are stripped before the element check, so anything that parses differently around them is refused.
+  if (/<!\[CDATA\[/i.test(text) || /--!>/.test(text)) return "has a CDATA section or a malformed comment";
   const markup = text.replace(/<!--[\s\S]*?-->/g, "");
   for (const [, prefix = "", name] of markup.matchAll(/<\s*([A-Za-z_][\w.-]*:)?([A-Za-z_][\w.-]*)/g)) {
     if (!SVG_ELEMENTS.has(name)) return `has the element <${prefix}${name}>, which is not allowed`;

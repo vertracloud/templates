@@ -58,6 +58,8 @@ test("every image the Dockerfile pulls must be pinned by digest", () => {
 test("an icon with a script, a link or an external reference fails", () => {
   const icon = (svg) => mutated("discord-bot-js", () => svg, "icon.svg");
   const wrap = (inner) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${inner}</svg>`;
+  assert.match(icon(wrap("<![CDATA[<!--]]><script>alert(1)</script><!---->")), /CDATA section or a malformed comment/);
+  assert.match(icon(wrap("<!-- --!><script>alert(1)</script> -->")), /CDATA section or a malformed comment/);
   assert.match(icon(wrap('<x:script xmlns:x="http://www.w3.org/2000/svg">alert(1)</x:script>')), /element <x:script>/);
   assert.match(icon(wrap('<path d="M0 0" x:onload="alert(1)"/>')), /event handler/);
   assert.match(icon(wrap('<animate attributeName="href" to="#a"/>')), /animates a link/);
