@@ -1,0 +1,142 @@
+# Pull request:  validate every template, then, for each template the PR touches, build its image (when there is a Dockerfile) and scan
+#                it for file capabilities. The Vertra Cloud team runs its own tests before merging.
+# Merge on main: pack every template and upload the packages and catalog/index.json to the catalog bucket with GitHub secrets.
+#                The platform pulls the bucket on a schedule; nothing calls the platform from here.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    outputs:
+      changed: ${{ steps.changed.outputs.list }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Manifest vs schema/v1.json, placeholders, `when`, plan slugs, permissions, sources, README, icon, docs, Dockerfile
+      # rules, secrets in env, declared license (`links.license`) and the 5000 files / 20 MB / 100 MB limits.
+      - run: node scripts/validate.mjs
+      - run: npm test
+      # Folder names come from the pull request: only `^[a-z0-9-]+$` (the template slug rule) goes to the matrix, and every value reaches the
+      # shell through `env`, never through `${{ }}` inside `run`.
+      - name: Templates touched by this pull request
+        id: changed
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            list=$(git diff --name-only "$BASE"...HEAD | cut -d/ -f1 | sort -u | grep -E '^[a-z0-9-]+$' | while read -r d; do [ -f "$d/vertracloud.template.yaml" ] && echo "$d"; done | jq -R . | jq -sc .)
+          else
+            list=$(for d in */; do d="${d%/}"; printf '%s\n' "$d" | grep -qE '^[a-z0-9-]+$' && [ -f "$d/vertracloud.template.yaml" ] && echo "$d"; done | jq -R . | jq -sc .)
+          fi
+          echo "list=${list:-[]}" >> "$GITHUB_OUTPUT"
+          echo "Templates to check: ${list}"
+      # A published version never changes: a template folder that changed needs a new `version`.
+      - name: Changed templates have a new version
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          LIST: ${{ steps.changed.outputs.list }}
+        run: |
+          fail=0
+          for d in $(printf '%s' "$LIST" | jq -r '.[]'); do
+            old=$(git show "$BASE:$d/vertracloud.template.yaml" 2>/dev/null | grep -m1 -E '^version:' || true)
+            new=$(grep -m1 -E '^version:' "$d/vertracloud.template.yaml")
+            if [ -n "$old" ] && [ "$old" = "$new" ]; then echo "::error::$d changed without a new version"; fail=1; fi
+          done
+          exit "$fail"
+
+  image:
+    needs: validate
+    if: github.event_name == 'pull_request' && needs.validate.outputs.changed != '[]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        template: ${{ fromJson(needs.validate.outputs.changed) }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      # Builds <template>/docker (if present) and fails on any file capability in the image (such binaries cannot exec under cap-drop ALL).
+      - name: Build and scan the image
+        env:
+          TEMPLATE: ${{ matrix.template }}
+        run: ./scripts/image-check.sh "$TEMPLATE"
+
+  # No secret here: this job runs the repository code and its dependencies.
+  pack:
+    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: node scripts/pack.mjs --out dist
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: catalog
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  # The credentials live only here: no checkout, no npm, `aws` by absolute path. The `catalog` environment waits for a manual approval.
+  # Secrets (environment `catalog`): CATALOG_S3_ENDPOINT, CATALOG_S3_BUCKET, CATALOG_S3_ACCESS_KEY_ID, CATALOG_S3_SECRET_ACCESS_KEY.
+  publish:
+    needs: pack
+    runs-on: ubuntu-24.04
+    environment: catalog
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: catalog
+          path: dist
+      # Packages first, the index last. A version already in the bucket is never overwritten; different bytes fail the job.
+      - name: Upload to the catalog bucket
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.CATALOG_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CATALOG_S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          ENDPOINT: ${{ secrets.CATALOG_S3_ENDPOINT }}
+          BUCKET: ${{ secrets.CATALOG_S3_BUCKET }}
+        run: |
+          set -euo pipefail
+          aws=/usr/local/bin/aws
+          cd dist
+          for zip in packages/*/*.zip; do
+            if "$aws" s3api head-object --bucket "$BUCKET" --key "$zip" --endpoint-url "$ENDPOINT" >/dev/null 2>&1; then
+              "$aws" s3 cp "s3://$BUCKET/$zip" /tmp/published.zip --endpoint-url "$ENDPOINT" --only-show-errors
+              if ! cmp -s /tmp/published.zip "$zip"; then echo "::error::$zip is already published with different content: bump the version"; exit 1; fi
+              echo "kept $zip"
+            else
+              "$aws" s3 cp "$zip" "s3://$BUCKET/$zip" --endpoint-url "$ENDPOINT" --only-show-errors
+              echo "uploaded $zip"
+            fi
+          done
+          "$aws" s3 cp catalog/index.json "s3://$BUCKET/catalog/index.json" --endpoint-url "$ENDPOINT" --cache-control "no-cache" --only-show-errors

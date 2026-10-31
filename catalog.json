@@ -1,0 +1,10 @@
+{
+  "discord-bot-js": { "origin": "vertra" },
+  "discord-bot-python": { "origin": "vertra" },
+  "evolution-api": { "origin": "vertra" },
+  "hermes-agent": { "origin": "vertra", "featured": true },
+  "n8n": { "origin": "vertra", "featured": true },
+  "open-webui": { "origin": "vertra" },
+  "openclaw": { "origin": "vertra", "featured": true },
+  "uptime-kuma": { "origin": "vertra" }
+}

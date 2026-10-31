@@ -1,0 +1,55 @@
+# Starter project, open and editable: discord.js 14.27.0 (Apache-2.0), /ping command.
+id: discord-bot-js
+version: 1.0.0
+name: { pt-br: Bot de Discord (JavaScript), en: Discord bot (JavaScript), es: Bot de Discord (JavaScript) }
+description:
+  pt-br: Bot de Discord com discord.js e o comando /ping. Ponto de partida para o seu bot.
+  en: Discord bot with discord.js and a /ping command. A starting point for your bot.
+  es: Bot de Discord con discord.js y el comando /ping. Punto de partida para tu bot.
+category: bots
+tags: [discord, bot, javascript, discordjs]
+icon: icon.svg
+links:
+  website: https://discord.js.org
+  docs: https://discordjs.guide
+  source: https://github.com/discordjs/discord.js
+  license: https://github.com/discordjs/discord.js/blob/main/LICENSE
+
+inputs:
+  - id: discord_token
+    type: secret
+    required: true
+    label: { pt-br: "Token do bot", en: "Bot token", es: "Token del bot" }
+    help:
+      pt-br: "No Discord Developer Portal: crie a aplicação, abra Bot e use Reset Token. Depois convide o bot ao servidor (OAuth2, escopos bot e applications.commands)."
+      en: "In the Discord Developer Portal: create the application, open Bot and use Reset Token. Then invite the bot to your server (OAuth2, scopes bot and applications.commands)."
+      es: "En el Discord Developer Portal: crea la aplicación, abre Bot y usa Reset Token. Luego invita al bot a tu servidor (OAuth2, scopes bot y applications.commands)."
+    validation: { min_length: 50, max_length: 100 }
+
+services:
+  app:
+    source: { type: code, path: src }
+    language: javascript
+    runtime_version: recommended
+    main: index.js
+    start: node index.js
+    ram: { min: 100, recommended: 256 }
+    web: none   # outbound connections only
+    env:
+      DISCORD_TOKEN: "{{inputs.discord_token}}"
+    healthcheck: { timeout: 60 }   # no HTTP; an invalid token exits with code 1 and a clear log message
+    deploy:
+      zero_downtime: { default: "off", locked: true }   # two copies with the same token would answer twice
+      auto_rollback: { default: true }
+      rollback: { with_data: optional }
+
+permissions:
+  code: { view: true, edit: true }
+  ram: { change: true, below_min: false, above_max: true }
+
+outputs:
+  - label: { pt-br: Próximo passo, en: Next step, es: Siguiente paso }
+    value:
+      pt-br: "Convide o bot ao seu servidor e digite /ping (o comando global pode levar alguns minutos para aparecer). Se o token estiver errado, o log do app mostra \"Login failed\"."
+      en: "Invite the bot to your server and type /ping (the global command can take a few minutes to show up). If the token is wrong, the app log shows \"Login failed\"."
+      es: "Invita al bot a tu servidor y escribe /ping (el comando global puede tardar unos minutos en aparecer). Si el token es incorrecto, el log de la app muestra \"Login failed\"."

@@ -1,0 +1,209 @@
+id: openclaw
+version: 1.0.0
+name: { pt-br: OpenClaw, en: OpenClaw, es: OpenClaw }
+description:
+  pt-br: Assistente de IA pessoal com navegador, painel e canais (Telegram, Discord, Slack, WhatsApp). Você traz a chave.
+  en: Personal AI assistant with browser, control panel and channels (Telegram, Discord, Slack, WhatsApp). Bring your own key.
+  es: Asistente de IA personal con navegador, panel y canales (Telegram, Discord, Slack, WhatsApp). Tú traes la clave.
+category: ai-agents
+tags: [ai, agent, assistant, browser, whatsapp, telegram, discord, slack]
+icon: icon.svg
+landing: openclaw
+byok: true
+links:
+  website: https://openclaw.ai
+  docs: https://docs.openclaw.ai
+  source: https://github.com/openclaw/openclaw
+  license: https://github.com/openclaw/openclaw/blob/main/LICENSE   # MIT (OpenClaw Foundation)
+
+# Shared secret, generated once: becomes the gateway variable and the output shown once.
+secrets: [gateway_token]
+
+inputs:
+  - id: provider
+    type: select
+    label: { pt-br: "Qual provedor de modelo você vai usar?", en: "Which model provider will you use?", es: "¿Qué proveedor de modelo vas a usar?" }
+    help:
+      pt-br: Você pode trocar de provedor depois, em Configurações > Modelos no painel do OpenClaw. O OpenClaw aceita dezenas de outros provedores pelo painel.
+      en: You can switch provider later in Settings > Models in the OpenClaw panel. OpenClaw supports dozens of other providers from the panel.
+      es: Puedes cambiar de proveedor después, en Configuración > Modelos del panel de OpenClaw. OpenClaw admite decenas de otros proveedores desde el panel.
+    default: openai
+    options:
+      # Model ids from the OpenClaw provider docs.
+      - value: openai
+        label: { pt-br: OpenAI, en: OpenAI, es: OpenAI }
+        sets: { env: { app: { OPENAI_API_KEY: "{{inputs.api_key}}", OPENCLAW_PROVIDER: openai, OPENCLAW_MODEL: "openai/gpt-6-astra" } } }
+      - value: anthropic
+        label: { pt-br: Anthropic, en: Anthropic, es: Anthropic }
+        sets: { env: { app: { ANTHROPIC_API_KEY: "{{inputs.api_key}}", OPENCLAW_PROVIDER: anthropic, OPENCLAW_MODEL: "anthropic/claude-sonnet-5-5" } } }
+      - value: google
+        label: { pt-br: Google Gemini, en: Google Gemini, es: Google Gemini }
+        sets: { env: { app: { GEMINI_API_KEY: "{{inputs.api_key}}", OPENCLAW_PROVIDER: google, OPENCLAW_MODEL: "google/gemini-4-argon" } } }
+      - value: openrouter
+        label: { pt-br: "OpenRouter (qualquer modelo)", en: "OpenRouter (any model)", es: "OpenRouter (cualquier modelo)" }
+        sets: { env: { app: { OPENROUTER_API_KEY: "{{inputs.api_key}}", OPENCLAW_PROVIDER: openrouter, OPENCLAW_MODEL: "openrouter/auto" } } }
+      - value: custom
+        label: { pt-br: "Endpoint compatível com OpenAI (URL + chave + modelo)", en: "OpenAI-compatible endpoint (URL + key + model)", es: "Endpoint compatible con OpenAI (URL + clave + modelo)" }
+        sets: { env: { app: { OPENAI_COMPAT_API_KEY: "{{inputs.api_key}}", OPENCLAW_PROVIDER: custom } } }
+  - id: api_key
+    type: secret
+    required: true
+    label: { pt-br: "Chave de API do provedor", en: "Provider API key", es: "Clave de API del proveedor" }
+    help:
+      pt-br: A chave fica só nas variáveis cifradas do seu app. O OpenClaw sobe mesmo com uma chave inválida; ela só é usada quando o assistente responde.
+      en: The key stays in your app's encrypted variables only. OpenClaw starts even with an invalid key; it is only used when the assistant answers.
+      es: La clave queda solo en las variables cifradas de tu app. OpenClaw arranca incluso con una clave inválida; solo se usa cuando el asistente responde.
+    validation: { min_length: 8, max_length: 512 }
+  - id: custom_base_url
+    type: url
+    required: true
+    when: { input: provider, equals: custom }
+    label: { pt-br: "URL base do endpoint (termina em /v1)", en: "Endpoint base URL (ends in /v1)", es: "URL base del endpoint (termina en /v1)" }
+    help:
+      pt-br: "Qualquer servidor que fale a API da OpenAI (vLLM, LiteLLM, Ollama em /v1, Together, Groq...). Ex.: https://api.exemplo.com/v1"
+      en: "Any server that speaks the OpenAI API (vLLM, LiteLLM, Ollama on /v1, Together, Groq...). E.g.: https://api.example.com/v1"
+      es: "Cualquier servidor que hable la API de OpenAI (vLLM, LiteLLM, Ollama en /v1, Together, Groq...). Ej.: https://api.ejemplo.com/v1"
+    validation: { max_length: 300 }
+  - id: model
+    type: text
+    label: { pt-br: "Modelo (opcional; obrigatório com endpoint compatível)", en: "Model (optional; required with a compatible endpoint)", es: "Modelo (opcional; obligatorio con endpoint compatible)" }
+    help:
+      pt-br: "Em branco = modelo padrão do provedor. Use o id do provedor, sem o prefixo (ex.: gpt-5.5, claude-opus-5, gemini-3.1-pro-preview). No OpenRouter, qualquer id (ex.: anthropic/claude-sonnet-4.5, ou um modelo gratuito terminado em :free)."
+      en: "Empty = the provider's default model. Use the provider's id, without the prefix (e.g. gpt-5.5, claude-opus-5, gemini-3.1-pro-preview). On OpenRouter, any id (e.g. anthropic/claude-sonnet-4.5, or a free model ending in :free)."
+      es: "Vacío = modelo predeterminado del proveedor. Usa el id del proveedor, sin el prefijo (p. ej. gpt-5.5, claude-opus-5, gemini-3.1-pro-preview). En OpenRouter, cualquier id (p. ej. anthropic/claude-sonnet-4.5, o un modelo gratuito que termine en :free)."
+    validation: { regex: "^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$", max_length: 128 }
+
+  - id: browser
+    type: select
+    label: { pt-br: "O assistente pode usar um navegador?", en: "Can the assistant use a browser?", es: "¿El asistente puede usar un navegador?" }
+    help:
+      pt-br: "Com navegador (Chromium dentro do app) o assistente abre páginas, lê e preenche sites. Usa 1 GB a mais de RAM (3 GB no mínimo). Sem ele o OpenClaw roda com 2 GB. Vale na primeira subida; depois, ajuste em Configurações > Navegador."
+      en: "With the browser (Chromium inside the app) the assistant opens, reads and fills in websites. It uses 1 GB more RAM (3 GB minimum). Without it OpenClaw runs on 2 GB. It applies on the first start; afterwards, adjust it in Settings > Browser."
+      es: "Con navegador (Chromium dentro de la app) el asistente abre, lee y completa sitios web. Usa 1 GB más de RAM (3 GB como mínimo). Sin él OpenClaw corre con 2 GB. Vale en el primer arranque; después, ajústalo en Configuración > Navegador."
+    default: "on"
+    options:
+      - value: "on"
+        label: { pt-br: "Sim, com navegador (recomendado)", en: "Yes, with browser (recommended)", es: "Sí, con navegador (recomendado)" }
+        sets: { ram_extra: { app: 1024 }, env: { app: { OPENCLAW_BROWSER: "on" } } }
+      - value: "off"
+        label: { pt-br: "Não, só texto (menos RAM)", en: "No, text only (less RAM)", es: "No, solo texto (menos RAM)" }
+        sets: { env: { app: { OPENCLAW_BROWSER: "off" } } }
+
+  # Optional channels, enabled on the first boot. WhatsApp has no token: pairing is by QR code in the panel. Each channel needs an allowlist.
+  - id: telegram
+    type: boolean
+    default: false
+    label: { pt-br: "Conectar ao Telegram agora", en: "Connect to Telegram now", es: "Conectar a Telegram ahora" }
+  - id: telegram_token
+    type: secret
+    required: true
+    when: { input: telegram, equals: true }
+    label: { pt-br: "Token do bot do Telegram", en: "Telegram bot token", es: "Token del bot de Telegram" }
+    help: { pt-br: "Crie o bot com o @BotFather e cole o token.", en: "Create the bot with @BotFather and paste the token.", es: "Crea el bot con @BotFather y pega el token." }
+    validation: { min_length: 20, max_length: 200 }
+  - id: telegram_users
+    type: text
+    required: true
+    when: { input: telegram, equals: true }
+    label: { pt-br: "Quem pode falar com o bot (ids numéricos, separados por vírgula)", en: "Who can talk to the bot (numeric ids, comma-separated)", es: "Quién puede hablar con el bot (ids numéricos, separados por coma)" }
+    help: { pt-br: "Seu id numérico: fale com @userinfobot. Sem lista, ninguém conversa com o bot.", en: "Your numeric id: talk to @userinfobot. Without a list nobody can talk to the bot.", es: "Tu id numérico: habla con @userinfobot. Sin lista, nadie conversa con el bot." }
+    validation: { regex: "^[0-9][0-9,\\s]*$", max_length: 200 }
+  - id: discord
+    type: boolean
+    default: false
+    label: { pt-br: "Conectar ao Discord agora", en: "Connect to Discord now", es: "Conectar a Discord ahora" }
+  - id: discord_token
+    type: secret
+    required: true
+    when: { input: discord, equals: true }
+    label: { pt-br: "Token do bot do Discord", en: "Discord bot token", es: "Token del bot de Discord" }
+    help: { pt-br: "Developer Portal > Bot > Reset Token. Ative Message Content Intent.", en: "Developer Portal > Bot > Reset Token. Enable Message Content Intent.", es: "Developer Portal > Bot > Reset Token. Activa Message Content Intent." }
+    validation: { min_length: 20, max_length: 200 }
+  - id: discord_users
+    type: text
+    required: true
+    when: { input: discord, equals: true }
+    label: { pt-br: "Quem pode falar com o bot (ids de usuário, separados por vírgula)", en: "Who can talk to the bot (user ids, comma-separated)", es: "Quién puede hablar con el bot (ids de usuario, separados por coma)" }
+    help: { pt-br: "Ative o Modo Desenvolvedor no Discord e copie seu id de usuário.", en: "Enable Developer Mode in Discord and copy your user id.", es: "Activa el Modo Desarrollador en Discord y copia tu id de usuario." }
+    validation: { regex: "^[0-9][0-9,\\s]*$", max_length: 200 }
+  - id: slack
+    type: boolean
+    default: false
+    label: { pt-br: "Conectar ao Slack agora", en: "Connect to Slack now", es: "Conectar a Slack ahora" }
+  - id: slack_bot_token
+    type: secret
+    required: true
+    when: { input: slack, equals: true }
+    label: { pt-br: "Token do bot do Slack (xoxb-...)", en: "Slack bot token (xoxb-...)", es: "Token del bot de Slack (xoxb-...)" }
+    help: { pt-br: "App do Slack com Socket Mode: OAuth & Permissions > Bot User OAuth Token.", en: "Slack app with Socket Mode: OAuth & Permissions > Bot User OAuth Token.", es: "App de Slack con Socket Mode: OAuth & Permissions > Bot User OAuth Token." }
+    validation: { regex: "^xoxb-", min_length: 20, max_length: 300 }
+  - id: slack_app_token
+    type: secret
+    required: true
+    when: { input: slack, equals: true }
+    label: { pt-br: "Token do app do Slack (xapp-...)", en: "Slack app token (xapp-...)", es: "Token de la app de Slack (xapp-...)" }
+    help: { pt-br: "Basic Information > App-Level Tokens, com o escopo connections:write.", en: "Basic Information > App-Level Tokens, with the connections:write scope.", es: "Basic Information > App-Level Tokens, con el alcance connections:write." }
+    validation: { regex: "^xapp-", min_length: 20, max_length: 300 }
+  - id: slack_users
+    type: text
+    required: true
+    when: { input: slack, equals: true }
+    label: { pt-br: "Quem pode falar com o bot (ids de membro, ex.: U0123ABCD, separados por vírgula)", en: "Who can talk to the bot (member ids, e.g. U0123ABCD, comma-separated)", es: "Quién puede hablar con el bot (ids de miembro, p. ej. U0123ABCD, separados por coma)" }
+    validation: { regex: "^[A-Za-z0-9][A-Za-z0-9,\\s]*$", max_length: 200 }
+
+services:
+  app:
+    # OpenClaw requires Node >=24.22.1 <25; the runtime already ships Chromium.
+    source: { type: code, path: src }
+    language: javascript
+    runtime_version: "24.22.1"
+    main: start.sh
+    start: sh start.sh   # listens on port 80
+    # Without the browser the app uses about 1.3 GiB (2048/3072); the `browser` option (on by default) adds 1024 through its `sets`. With 4 heavy pages open, 2048 MB
+    # reclaims constantly and times out; 3072 MB is stable.
+    ram: { min: 2048, recommended: 3072 }
+    web: required
+    env:
+      OPENCLAW_HOME: /app   # state goes to /app/.openclaw
+      OPENCLAW_GATEWAY_TOKEN: "{{secrets.gateway_token}}"
+      PUBLIC_ORIGIN: "{{app.url}}"   # becomes gateway.publicOrigin and controlUi.allowedOrigins
+      OPENCLAW_MODEL_ID: "{{inputs.model}}"   # empty = the provider option's default
+      OPENAI_COMPAT_BASE_URL: "{{inputs.custom_base_url}}"
+      TELEGRAM_BOT_TOKEN: "{{inputs.telegram_token}}"
+      TELEGRAM_ALLOWED_USERS: "{{inputs.telegram_users}}"
+      DISCORD_BOT_TOKEN: "{{inputs.discord_token}}"
+      DISCORD_ALLOWED_USERS: "{{inputs.discord_users}}"
+      SLACK_BOT_TOKEN: "{{inputs.slack_bot_token}}"
+      SLACK_APP_TOKEN: "{{inputs.slack_app_token}}"
+      SLACK_ALLOWED_USERS: "{{inputs.slack_users}}"
+      # OPENCLAW_PROVIDER, OPENCLAW_MODEL and the provider key come from the `sets` of the selected `provider` option.
+      # OPENCLAW_BROWSER (on|off) comes from the `browser` option. OPENCLAW_BOOTSTRAP_PAIRING=off disables the automatic pairing of the first browser.
+      # gateway.trustedProxies is recomputed on every boot as the container's own IPv4 subnet; with no interface it stays empty.
+    # The first boot takes 25-45 s; with Discord/Slack, OpenClaw installs the channel plugins and runs the doctor (1 to 3 min).
+    healthcheck: { path: /healthz, timeout: 420 }   # 200 {"ok":true,"status":"live"}
+    deploy:
+      zero_downtime: { default: off, locked: true }   # a second copy refuses to start on the same /app and two processes would answer twice on the channels
+      auto_rollback: { default: true }
+      rollback: { with_data: required }   # the doctor migrates the SQLite schema on upgrade
+
+permissions:
+  code: { view: true, edit: false }
+  ram: { change: true, below_min: false, above_max: true }
+
+outputs:
+  - label: { pt-br: Endereço, en: Address, es: Dirección }
+    value: "{{app.url}}"
+  - label: { pt-br: Token do gateway, en: Gateway token, es: Token del gateway }
+    value: "{{secrets.gateway_token}}"
+    secret: true
+    once: true
+  - label: { pt-br: Próximo passo, en: Next step, es: Siguiente paso }
+    value:
+      pt-br: "Abra o endereço, cole o token em Configurações > Gateway e aguarde até 15 s: o primeiro navegador é pareado sozinho. O terminal do painel já está ligado (e o navegador do agente, se você o escolheu)."
+      en: "Open the address, paste the token in Settings > Gateway and wait up to 15 s: the first browser is paired automatically. The panel terminal is already on (and the agent's browser, if you chose it)."
+      es: "Abre la dirección, pega el token en Configuración > Gateway y espera hasta 15 s: el primer navegador se empareja solo. La terminal del panel ya está activa (y el navegador del agente, si lo elegiste)."
+  - label: { pt-br: WhatsApp, en: WhatsApp, es: WhatsApp }
+    value:
+      pt-br: "Configurações > Canais > WhatsApp: escaneie o QR logo que aparecer (ele expira). Uma sessão de WhatsApp por app."
+      en: "Settings > Channels > WhatsApp: scan the QR as soon as it appears (it expires). One WhatsApp session per app."
+      es: "Configuración > Canales > WhatsApp: escanea el QR en cuanto aparezca (expira). Una sesión de WhatsApp por app."

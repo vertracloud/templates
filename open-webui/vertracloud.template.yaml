@@ -1,0 +1,134 @@
+# License: BSD-3 with a branding clause (https://github.com/open-webui/open-webui/blob/main/LICENSE): the "Open WebUI" brand cannot be
+# changed or removed except for up to 50 end users in 30 days, written permission or an enterprise license. This template keeps the brand.
+id: open-webui
+version: 1.0.0
+name: { pt-br: Open WebUI, en: Open WebUI, es: Open WebUI }
+description:
+  pt-br: Interface de chat com IA para a sua equipe. Você traz a chave do modelo.
+  en: A chat interface with AI for your team. You bring your own model key.
+  es: Interfaz de chat con IA para tu equipo. Tú traes la clave del modelo.
+category: ai-agents
+tags: [ai, chat, llm, assistant]
+icon: icon.png
+byok: true
+links:
+  website: https://openwebui.com
+  docs: https://docs.openwebui.com
+  source: https://github.com/open-webui/open-webui
+  license: https://github.com/open-webui/open-webui/blob/main/LICENSE
+
+inputs:
+  - id: provider
+    type: select
+    label: { pt-br: "Qual provedor de modelo você vai usar?", en: "Which model provider will you use?", es: "¿Qué proveedor de modelo vas a usar?" }
+    help:
+      pt-br: "Qualquer API compatível com OpenAI. A Vertra não hospeda modelo: a chave é sua e fica só neste app."
+      en: "Any OpenAI-compatible API. Vertra does not host a model: the key is yours and stays only in this app."
+      es: "Cualquier API compatible con OpenAI. Vertra no aloja un modelo: la clave es tuya y queda solo en esta app."
+    default: openai
+    options:
+      # OpenAI-compatible API address of each provider.
+      - value: openai
+        label: { pt-br: OpenAI }
+        sets: { env: { app: { OPENAI_API_BASE_URL: "https://api.openai.com/v1" } } }
+      - value: openrouter
+        label: { pt-br: OpenRouter (um acesso a vários modelos) }
+        sets: { env: { app: { OPENAI_API_BASE_URL: "https://openrouter.ai/api/v1" } } }
+      - value: anthropic
+        label: { pt-br: Anthropic (API compatível com OpenAI) }
+        sets: { env: { app: { OPENAI_API_BASE_URL: "https://api.anthropic.com/v1" } } }
+      - value: gemini
+        label: { pt-br: Google Gemini (API compatível com OpenAI) }
+        sets: { env: { app: { OPENAI_API_BASE_URL: "https://generativelanguage.googleapis.com/v1beta/openai" } } }
+      - value: custom
+        label: { pt-br: "Outro (informe o endereço)", en: "Other (enter the address)", es: "Otro (indica la dirección)" }
+        sets: { env: { app: { OPENAI_API_BASE_URL: "{{inputs.base_url}}" } } }
+  - id: base_url
+    type: url
+    required: true
+    label: { pt-br: "Endereço da API (compatível com OpenAI)", en: "API address (OpenAI-compatible)", es: "Dirección de la API (compatible con OpenAI)" }
+    help: { pt-br: "Termina em /v1, por exemplo https://meu-provedor.example/v1." }
+    when: { input: provider, equals: custom }
+  - id: api_key
+    type: secret
+    required: true
+    label: { pt-br: "Chave de API do provedor", en: "Provider API key", es: "Clave de API del proveedor" }
+    validation: { min_length: 8, max_length: 512 }
+  - id: admin_email
+    type: email
+    required: true
+    label: { pt-br: "E-mail do administrador", en: "Administrator email", es: "Correo del administrador" }
+    help:
+      pt-br: "A conta de administrador já nasce pronta: ninguém mais consegue criar conta sem você (o cadastro aberto fica desligado)."
+      en: "The administrator account is created for you: nobody else can sign up (open sign-up is off)."
+      es: "La cuenta de administrador ya nace lista: nadie más puede registrarse (el registro abierto queda desactivado)."
+  - id: admin_password
+    type: secret
+    required: true
+    label: { pt-br: "Senha do administrador", en: "Administrator password", es: "Contraseña del administrador" }
+    validation: { min_length: 10, max_length: 128 }
+  - id: storage
+    type: select
+    label: { pt-br: "Onde o Open WebUI guarda os dados?", en: "Where does Open WebUI store its data?", es: "¿Dónde guarda Open WebUI los datos?" }
+    help:
+      pt-br: "SQLite serve para uso pessoal ou time pequeno. Com Postgres gerenciado o app usa 1 GB a mais do plano."
+      en: "SQLite is fine for personal use or a small team. Managed Postgres uses 1 GB more of the plan."
+      es: "SQLite sirve para uso personal o un equipo pequeño. Con Postgres administrado la app usa 1 GB más del plan."
+    default: sqlite
+    options:
+      - value: sqlite
+        label: { pt-br: "SQLite interno (no disco do app)", en: "Built-in SQLite (on the app disk)", es: "SQLite interno (en el disco de la app)" }
+        sets: { services: { db: "off" } }
+      - value: postgres
+        label: { pt-br: "Postgres gerenciado", en: "Managed Postgres", es: "Postgres administrado" }
+        # sslmode=verify-full with a client certificate (libpq); needs client.key 0400.
+        sets:
+          services: { db: "on" }
+          env:
+            app:
+              DATABASE_URL: "postgresql://{{services.db.user}}:{{services.db.password}}@{{services.db.host}}:{{services.db.port}}/{{services.db.database}}?sslmode=verify-full&sslrootcert={{services.db.ssl.ca_path}}&sslcert={{services.db.ssl.cert_path}}&sslkey={{services.db.ssl.key_path}}"
+
+services:
+  app:
+    source:
+      type: image
+      image: "ghcr.io/open-webui/open-webui:v0.12.4-slim@sha256:41812075aede8ada8497cb2b71c76412978633eee72775bb77796f593d03b677"
+      context: docker
+    port: 8080
+    ram: { min: 512, recommended: 1024 }   # 1024 leaves room for attachments and several users
+    web: required
+    env:
+      WEBUI_SECRET_KEY: "{{secret:48}}"   # stable: signs the logins; changing it logs everyone out
+      WEBUI_URL: "{{app.url}}"
+      WEBUI_ADMIN_EMAIL: "{{inputs.admin_email}}"
+      WEBUI_ADMIN_PASSWORD: "{{inputs.admin_password}}"   # only creates the account if no user exists yet
+      ENABLE_SIGNUP: "false"
+      OPENAI_API_KEY: "{{inputs.api_key}}"   # OPENAI_API_BASE_URL and DATABASE_URL (Postgres option) come from the options' `sets`
+      ENABLE_OLLAMA_API: "false"
+      BYPASS_EMBEDDING_AND_RETRIEVAL: "true"   # the slim image has no embedding model; files go whole into the context
+      ENABLE_VERSION_UPDATE_CHECK: "false"   # the version is the one pinned by the template
+      WEBUI_SESSION_COOKIE_SECURE: "true"   # the app is served over https
+      CORS_ALLOW_ORIGIN: "{{app.url}}"   # the default `*` is refused by the app itself
+      XFRAME_OPTIONS: DENY
+      CONTENT_SECURITY_POLICY: "frame-ancestors 'none'"
+    healthcheck: { path: /health, timeout: 180 }   # 200 {"status":true}
+    deploy:
+      zero_downtime: { default: "off", locked: true }   # the new copy migrates the database on boot while the old one still serves; sessions live in each copy's memory
+      auto_rollback: { default: true }
+      rollback: { with_data: required }   # Open WebUI migrates the database on upgrade
+  db:
+    database: postgres
+    ram: { min: 1024, recommended: 1024 }
+    when: { input: storage, equals: postgres }
+
+permissions:
+  code: { view: true, edit: false }
+  ram: { change: true, below_min: false, above_max: true }
+
+outputs:
+  - { label: { pt-br: Endereço, en: Address, es: Dirección }, value: "{{app.url}}" }
+  - label: { pt-br: Próximo passo, en: Next step, es: Siguiente paso }
+    value:
+      pt-br: "Abra o endereço e entre com o e-mail e a senha de administrador que você informou. Os modelos do provedor aparecem sozinhos; para criar outras contas, use o painel de administração."
+      en: "Open the address and sign in with the administrator email and password you entered. The provider's models show up by themselves; to create more accounts, use the admin panel."
+      es: "Abre la dirección e inicia sesión con el correo y la contraseña de administrador que indicaste. Los modelos del proveedor aparecen solos; para crear más cuentas, usa el panel de administración."

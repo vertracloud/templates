@@ -1,0 +1,277 @@
+id: hermes-agent
+version: 1.0.0
+name: { pt-br: Hermes Agent, en: Hermes Agent, es: Hermes Agent }
+description:
+  pt-br: Agente de IA que aprende com o uso, com chat no navegador e canais (Telegram, Discord, Slack, WhatsApp, e-mail).
+  en: AI agent that learns from use, with browser chat and channels (Telegram, Discord, Slack, WhatsApp, email).
+  es: Agente de IA que aprende con el uso, con chat en el navegador y canales (Telegram, Discord, Slack, WhatsApp, correo).
+category: ai-agents
+tags: [ai, agent, assistant, chat, whatsapp, telegram, discord, slack, python]
+icon: icon.png
+landing: hermes-agent
+byok: true
+links:
+  website: https://hermes-agent.nousresearch.com
+  docs: https://hermes-agent.nousresearch.com/docs
+  source: https://github.com/NousResearch/hermes-agent
+  license: https://github.com/NousResearch/hermes-agent/blob/main/LICENSE   # MIT (Nous Research); optional chat: github.com/nesquena/hermes-webui (MIT)
+
+# Browser chat password (its own login), generated once and shown once.
+secrets: [admin_password]
+
+inputs:
+  - id: provider
+    type: select
+    label: { pt-br: "Qual provedor de modelo você vai usar?", en: "Which model provider will you use?", es: "¿Qué proveedor de modelo vas a usar?" }
+    help:
+      pt-br: O provedor e o modelo escolhidos aqui valem a cada início do app (a variável manda). Para trocar, mude as variáveis do app. O Hermes aceita dezenas de outros provedores, configuráveis nas configurações do chat.
+      en: The provider and model chosen here apply on every app start (the variable wins). To change them, edit the app variables. Hermes supports dozens of other providers, configurable in the chat settings.
+      es: El proveedor y el modelo elegidos aquí valen en cada inicio de la app (manda la variable). Para cambiarlos, edita las variables de la app. Hermes admite decenas de otros proveedores, configurables en los ajustes del chat.
+    default: openrouter
+    options:
+      # Hermes provider names. `openai` is an alias of `custom` + https://api.openai.com/v1.
+      # Model ids from the Hermes provider docs.
+      - value: openrouter
+        label: { pt-br: "OpenRouter (qualquer modelo)", en: "OpenRouter (any model)", es: "OpenRouter (cualquier modelo)" }
+        sets: { env: { app: { OPENROUTER_API_KEY: "{{inputs.api_key}}", HERMES_MODEL_PROVIDER: openrouter, HERMES_MODEL: "anthropic/claude-sonnet-4.5" } } }
+      - value: anthropic
+        label: { pt-br: Anthropic, en: Anthropic, es: Anthropic }
+        sets: { env: { app: { ANTHROPIC_API_KEY: "{{inputs.api_key}}", HERMES_MODEL_PROVIDER: anthropic, HERMES_MODEL: "claude-sonnet-4-5" } } }
+      - value: openai
+        label: { pt-br: OpenAI, en: OpenAI, es: OpenAI }
+        sets: { env: { app: { OPENAI_API_KEY: "{{inputs.api_key}}", HERMES_MODEL_PROVIDER: openai, HERMES_MODEL: "gpt-5.5" } } }
+      - value: gemini
+        label: { pt-br: Google Gemini, en: Google Gemini, es: Google Gemini }
+        sets: { env: { app: { GEMINI_API_KEY: "{{inputs.api_key}}", HERMES_MODEL_PROVIDER: gemini, HERMES_MODEL: "gemini-2.5-flash" } } }
+      - value: custom
+        label: { pt-br: "Endpoint compatível com OpenAI (URL + chave + modelo)", en: "OpenAI-compatible endpoint (URL + key + model)", es: "Endpoint compatible con OpenAI (URL + clave + modelo)" }
+        sets: { env: { app: { OPENAI_COMPAT_API_KEY: "{{inputs.api_key}}", HERMES_MODEL_PROVIDER: custom } } }
+  - id: api_key
+    type: secret
+    required: true
+    label: { pt-br: "Chave de API do provedor", en: "Provider API key", es: "Clave de API del proveedor" }
+    validation: { min_length: 8, max_length: 512 }
+  - id: custom_base_url
+    type: url
+    required: true
+    when: { input: provider, equals: custom }
+    label: { pt-br: "URL base do endpoint (termina em /v1)", en: "Endpoint base URL (ends in /v1)", es: "URL base del endpoint (termina en /v1)" }
+    help:
+      pt-br: "Qualquer servidor que fale a API da OpenAI (vLLM, LiteLLM, Ollama em /v1, Together, Groq...). Ex.: https://api.exemplo.com/v1"
+      en: "Any server that speaks the OpenAI API (vLLM, LiteLLM, Ollama on /v1, Together, Groq...). E.g.: https://api.example.com/v1"
+      es: "Cualquier servidor que hable la API de OpenAI (vLLM, LiteLLM, Ollama en /v1, Together, Groq...). Ej.: https://api.ejemplo.com/v1"
+    validation: { max_length: 300 }
+  - id: model
+    type: text
+    label: { pt-br: "Modelo (opcional; obrigatório com endpoint compatível)", en: "Model (optional; required with a compatible endpoint)", es: "Modelo (opcional; obligatorio con endpoint compatible)" }
+    help:
+      pt-br: "Em branco = modelo padrão do provedor. No OpenRouter, qualquer id (ex.: anthropic/claude-sonnet-4.5, ou um modelo gratuito terminado em :free). Nos outros, o id do provedor."
+      en: "Empty = the provider's default model. On OpenRouter, any id (e.g. anthropic/claude-sonnet-4.5, or a free model ending in :free). Elsewhere, the provider's id."
+      es: "Vacío = modelo predeterminado del proveedor. En OpenRouter, cualquier id (p. ej. anthropic/claude-sonnet-4.5, o un modelo gratuito que termine en :free). En los demás, el id del proveedor."
+    validation: { regex: "^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$", max_length: 128 }
+  - id: webui
+    type: boolean
+    default: true
+    label: { pt-br: "Chat no navegador (Hermes WebUI)", en: "Browser chat (Hermes WebUI)", es: "Chat en el navegador (Hermes WebUI)" }
+    help:
+      pt-br: "Chat com sessões, arquivos e configurações, protegido pela senha gerada. Custa ~150 MB de RAM. Desligado, o app só atende pelos canais e a página responde apenas uma nota."
+      en: "Chat with sessions, files and settings, protected by the generated password. Costs ~150 MB of RAM. Off, the app only answers through its channels and the page returns just a note."
+      es: "Chat con sesiones, archivos y ajustes, protegido por la contraseña generada. Cuesta ~150 MB de RAM. Desactivado, la app solo responde por sus canales y la página devuelve solo una nota."
+
+  # Optional channels. Each needs an allowlist (GATEWAY_ALLOW_ALL_USERS stays false).
+  # Signal (needs an external signal-cli daemon), Matrix, Mattermost and others: app variables (see README).
+  - id: telegram
+    type: boolean
+    default: false
+    label: { pt-br: "Conectar ao Telegram", en: "Connect to Telegram", es: "Conectar a Telegram" }
+  - id: telegram_token
+    type: secret
+    required: true
+    when: { input: telegram, equals: true }
+    label: { pt-br: "Token do bot do Telegram", en: "Telegram bot token", es: "Token del bot de Telegram" }
+    help: { pt-br: "Crie o bot com o @BotFather e cole o token.", en: "Create the bot with @BotFather and paste the token.", es: "Crea el bot con @BotFather y pega el token." }
+    validation: { min_length: 20, max_length: 200 }
+  - id: telegram_users
+    type: text
+    required: true
+    when: { input: telegram, equals: true }
+    label: { pt-br: "Quem pode falar com o bot (ids numéricos, separados por vírgula)", en: "Who can talk to the bot (numeric ids, comma-separated)", es: "Quién puede hablar con el bot (ids numéricos, separados por coma)" }
+    help: { pt-br: "Seu id numérico: fale com @userinfobot. Sem lista, ninguém conversa com o bot.", en: "Your numeric id: talk to @userinfobot. Without a list nobody can talk to the bot.", es: "Tu id numérico: habla con @userinfobot. Sin lista, nadie conversa con el bot." }
+    validation: { regex: "^[0-9][0-9,\\s]*$", max_length: 200 }
+  - id: discord
+    type: boolean
+    default: false
+    label: { pt-br: "Conectar ao Discord", en: "Connect to Discord", es: "Conectar a Discord" }
+  - id: discord_token
+    type: secret
+    required: true
+    when: { input: discord, equals: true }
+    label: { pt-br: "Token do bot do Discord", en: "Discord bot token", es: "Token del bot de Discord" }
+    help: { pt-br: "Developer Portal > Bot > Reset Token. Ative Message Content Intent.", en: "Developer Portal > Bot > Reset Token. Enable Message Content Intent.", es: "Developer Portal > Bot > Reset Token. Activa Message Content Intent." }
+    validation: { min_length: 20, max_length: 200 }
+  - id: discord_users
+    type: text
+    required: true
+    when: { input: discord, equals: true }
+    label: { pt-br: "Quem pode falar com o bot (ids de usuário, separados por vírgula)", en: "Who can talk to the bot (user ids, comma-separated)", es: "Quién puede hablar con el bot (ids de usuario, separados por coma)" }
+    help: { pt-br: "Ative o Modo Desenvolvedor no Discord e copie seu id de usuário.", en: "Enable Developer Mode in Discord and copy your user id.", es: "Activa el Modo Desarrollador en Discord y copia tu id de usuario." }
+    validation: { regex: "^[0-9][0-9,\\s]*$", max_length: 200 }
+  - id: slack
+    type: boolean
+    default: false
+    label: { pt-br: "Conectar ao Slack", en: "Connect to Slack", es: "Conectar a Slack" }
+  - id: slack_bot_token
+    type: secret
+    required: true
+    when: { input: slack, equals: true }
+    label: { pt-br: "Token do bot do Slack (xoxb-...)", en: "Slack bot token (xoxb-...)", es: "Token del bot de Slack (xoxb-...)" }
+    help: { pt-br: "App do Slack com Socket Mode: OAuth & Permissions > Bot User OAuth Token.", en: "Slack app with Socket Mode: OAuth & Permissions > Bot User OAuth Token.", es: "App de Slack con Socket Mode: OAuth & Permissions > Bot User OAuth Token." }
+    validation: { regex: "^xoxb-", min_length: 20, max_length: 300 }
+  - id: slack_app_token
+    type: secret
+    required: true
+    when: { input: slack, equals: true }
+    label: { pt-br: "Token do app do Slack (xapp-...)", en: "Slack app token (xapp-...)", es: "Token de la app de Slack (xapp-...)" }
+    help: { pt-br: "Basic Information > App-Level Tokens, com o escopo connections:write.", en: "Basic Information > App-Level Tokens, with the connections:write scope.", es: "Basic Information > App-Level Tokens, con el alcance connections:write." }
+    validation: { regex: "^xapp-", min_length: 20, max_length: 300 }
+  - id: slack_users
+    type: text
+    required: true
+    when: { input: slack, equals: true }
+    label: { pt-br: "Quem pode falar com o bot (ids de membro, ex.: U0123ABCD, separados por vírgula)", en: "Who can talk to the bot (member ids, e.g. U0123ABCD, comma-separated)", es: "Quién puede hablar con el bot (ids de miembro, p. ej. U0123ABCD, separados por coma)" }
+    validation: { regex: "^[A-Za-z0-9][A-Za-z0-9,\\s]*$", max_length: 200 }
+
+  - id: whatsapp
+    type: boolean
+    default: false
+    label: { pt-br: "Conectar ao WhatsApp (pareamento por QR no log do app)", en: "Connect to WhatsApp (QR pairing in the app log)", es: "Conectar a WhatsApp (emparejamiento por QR en el log de la app)" }
+    help:
+      pt-br: "Baixa o Node.js (arquivo oficial, com SHA-256 conferido) e usa a ponte Baileys. O QR sai no log do app depois do deploy. Ponte não oficial: o WhatsApp pode restringir o número; para a API oficial da Meta veja o README."
+      en: "Downloads Node.js (official archive, SHA-256 checked) and uses the Baileys bridge. The QR shows in the app log after the deploy. Unofficial bridge: WhatsApp may restrict the number; for Meta's official API see the README."
+      es: "Descarga Node.js (archivo oficial, con SHA-256 verificado) y usa el puente Baileys. El QR sale en el log de la app tras el deploy. Puente no oficial: WhatsApp puede restringir el número; para la API oficial de Meta mira el README."
+  - id: whatsapp_users
+    type: text
+    required: true
+    when: { input: whatsapp, equals: true }
+    label: { pt-br: "Quem pode falar com o agente (números com DDI, só dígitos, separados por vírgula)", en: "Who can talk to the agent (numbers with country code, digits only, comma-separated)", es: "Quién puede hablar con el agente (números con código de país, solo dígitos, separados por coma)" }
+    help: { pt-br: "Ex.: 5511999999999. O QR aparece no log do app depois do deploy.", en: "E.g.: 5511999999999. The QR shows in the app log after the deploy.", es: "Ej.: 5511999999999. El QR aparece en el log de la app tras el deploy." }
+    validation: { regex: "^[0-9][0-9,\\s]*$", max_length: 200 }
+
+  - id: email
+    type: boolean
+    default: false
+    label: { pt-br: "Conectar ao e-mail (caixa IMAP/SMTP)", en: "Connect to email (IMAP/SMTP mailbox)", es: "Conectar al correo (buzón IMAP/SMTP)" }
+    help:
+      pt-br: "O agente lê e responde e-mails de quem estiver na lista de permitidos, e só de remetentes que o seu servidor de e-mail autenticou (DMARC, SPF ou DKIM): sem isso qualquer pessoa poderia se passar por alguém da lista. Use uma caixa dedicada e, no Gmail, uma senha de app. Não exercitado com uma caixa real."
+      en: "The agent reads and replies to emails from whoever is on the allowlist, and only from senders your mail server authenticated (DMARC, SPF or DKIM): otherwise anyone could pose as someone on the list. Use a dedicated mailbox and, on Gmail, an app password. Not exercised with a real mailbox."
+      es: "El agente lee y responde correos de quien esté en la lista de permitidos, y solo de remitentes que tu servidor de correo autenticó (DMARC, SPF o DKIM): sin eso cualquiera podría hacerse pasar por alguien de la lista. Usa un buzón dedicado y, en Gmail, una contraseña de app. No ejercitado con un buzón real."
+  - id: email_address
+    type: email
+    required: true
+    when: { input: email, equals: true }
+    label: { pt-br: "Endereço de e-mail do agente", en: "Agent email address", es: "Dirección de correo del agente" }
+  - id: email_password
+    type: secret
+    required: true
+    when: { input: email, equals: true }
+    label: { pt-br: "Senha (ou senha de app) da caixa", en: "Mailbox password (or app password)", es: "Contraseña (o contraseña de app) del buzón" }
+    validation: { max_length: 256 }
+  - id: email_imap_host
+    type: text
+    required: true
+    when: { input: email, equals: true }
+    label: { pt-br: "Servidor IMAP (entrada)", en: "IMAP server (incoming)", es: "Servidor IMAP (entrada)" }
+    help: { pt-br: "Ex.: imap.gmail.com (porta 993).", en: "E.g.: imap.gmail.com (port 993).", es: "Ej.: imap.gmail.com (puerto 993)." }
+    validation: { regex: "^[A-Za-z0-9][A-Za-z0-9.-]*$", max_length: 253 }
+  - id: email_smtp_host
+    type: text
+    required: true
+    when: { input: email, equals: true }
+    label: { pt-br: "Servidor SMTP (saída)", en: "SMTP server (outgoing)", es: "Servidor SMTP (salida)" }
+    help: { pt-br: "Ex.: smtp.gmail.com (porta 587).", en: "E.g.: smtp.gmail.com (port 587).", es: "Ej.: smtp.gmail.com (puerto 587)." }
+    validation: { regex: "^[A-Za-z0-9][A-Za-z0-9.-]*$", max_length: 253 }
+  - id: email_users
+    type: text
+    required: true
+    when: { input: email, equals: true }
+    label: { pt-br: "Quem pode escrever ao agente (e-mails, separados por vírgula)", en: "Who can write to the agent (emails, comma-separated)", es: "Quién puede escribir al agente (correos, separados por coma)" }
+    validation: { regex: "^[A-Za-z0-9][A-Za-z0-9@.,_+\\s-]*$", max_length: 300 }
+  - id: email_authserv_id
+    type: text
+    required: true
+    default: mx.google.com
+    when: { input: email, equals: true }
+    label: { pt-br: "Identificador do servidor de e-mail (authserv-id)", en: "Mail server identifier (authserv-id)", es: "Identificador del servidor de correo (authserv-id)" }
+    help:
+      pt-br: "O valor antes do primeiro ponto e vírgula no cabeçalho Authentication-Results mais ao topo de uma mensagem recebida (\"mostrar original\"). Gmail: mx.google.com. Se estiver errado, o agente ignora todos os e-mails. Não ligue EMAIL_TRUST_FROM_HEADER: qualquer pessoa poderia se passar por alguém da lista e comandar o agente."
+      en: "The value before the first semicolon in the topmost Authentication-Results header of a received message (\"show original\"). Gmail: mx.google.com. If it is wrong, the agent ignores every email. Do not turn on EMAIL_TRUST_FROM_HEADER: anyone could pose as someone on the list and command the agent."
+      es: "El valor antes del primer punto y coma en el encabezado Authentication-Results más arriba de un mensaje recibido (\"mostrar original\"). Gmail: mx.google.com. Si es incorrecto, el agente ignora todos los correos. No actives EMAIL_TRUST_FROM_HEADER: cualquiera podría hacerse pasar por alguien de la lista y comandar al agente."
+    validation: { regex: "^[A-Za-z0-9][A-Za-z0-9.-]*$", max_length: 253 }
+
+services:
+  app:
+    # Code template: src/ has the entrypoint and the pinned dependencies; the Hermes Agent and WebUI sources are downloaded by commit
+    # (SHA-256 checked) on the first start. The Hermes dashboard needs Node to build, so it is not part of this template.
+    source: { type: code, path: src }
+    language: python
+    runtime_version: "3.14.10"
+    main: start.py
+    start: python3 -u start.py   # code apps listen on port 80; start.py passes it on to the WebUI
+    # About 0.55 GiB idle; headroom for extra agents and the terminal tool.
+    ram: { min: 1536, recommended: 2048 }
+    web: required
+    env:
+      HERMES_HOME: /app/.hermes
+      PIP_NO_DEPS: "1"   # requirements.txt is the full hashed lock; pip would refuse upstream's own override (Pillow 13)
+      HERMES_WEBUI: "{{inputs.webui}}"
+      HERMES_ADMIN_PASSWORD: "{{secrets.admin_password}}"   # becomes a hash at the start and is removed from the process environment
+      PUBLIC_ORIGIN: "{{app.url}}"
+      GATEWAY_ALLOW_ALL_USERS: "false"
+      HERMES_MODEL_CUSTOM: "{{inputs.model}}"   # empty = the provider option's default
+      HERMES_BASE_URL: "{{inputs.custom_base_url}}"
+      TELEGRAM_BOT_TOKEN: "{{inputs.telegram_token}}"
+      TELEGRAM_ALLOWED_USERS: "{{inputs.telegram_users}}"
+      DISCORD_BOT_TOKEN: "{{inputs.discord_token}}"
+      DISCORD_ALLOWED_USERS: "{{inputs.discord_users}}"
+      SLACK_BOT_TOKEN: "{{inputs.slack_bot_token}}"
+      SLACK_APP_TOKEN: "{{inputs.slack_app_token}}"
+      SLACK_ALLOWED_USERS: "{{inputs.slack_users}}"
+      WHATSAPP_ENABLED: "{{inputs.whatsapp}}"
+      WHATSAPP_ALLOWED_USERS: "{{inputs.whatsapp_users}}"
+      EMAIL_ADDRESS: "{{inputs.email_address}}"
+      EMAIL_PASSWORD: "{{inputs.email_password}}"
+      EMAIL_IMAP_HOST: "{{inputs.email_imap_host}}"
+      EMAIL_SMTP_HOST: "{{inputs.email_smtp_host}}"
+      EMAIL_ALLOWED_USERS: "{{inputs.email_users}}"
+      EMAIL_AUTHSERV_ID: "{{inputs.email_authserv_id}}"
+      EMAIL_TRUST_FROM_HEADER: "false"   # true would trust a forged From: and let anyone command the agent
+      EMAIL_ALLOW_ALL_USERS: "false"
+      # provider, default model and key come from the `sets` of the selected `provider` option.
+    # First start: dependencies, then the source downloads (about 120 MB; Node.js too with WhatsApp) and the skills sync.
+    healthcheck: { path: /health, timeout: 420 }   # 200 with counters only (no password, no data)
+    deploy:
+      zero_downtime: { default: off, locked: true }   # the second copy exits with code 1 (gateway already running)
+      auto_rollback: { default: true }
+      rollback: { with_data: optional }
+
+permissions:
+  code: { view: true, edit: false }
+  ram: { change: true, below_min: false, above_max: true }
+
+outputs:
+  - label: { pt-br: Chat, en: Chat, es: Chat }
+    value: "{{app.url}}"
+  - label: { pt-br: Senha, en: Password, es: Contraseña }
+    value: "{{secrets.admin_password}}"
+    secret: true
+    once: true
+  - label: { pt-br: Próximo passo, en: Next step, es: Siguiente paso }
+    value:
+      pt-br: "Abra o endereço e entre com a senha acima (só a senha; sem usuário). Fale com o bot no Telegram/Discord/Slack. Token errado aparece no log do app. A primeira inicialização baixa o Hermes (alguns minutos)."
+      en: "Open the address and sign in with the password above (password only, no user). Talk to the bot on Telegram/Discord/Slack. A wrong token shows in the app log. The first start downloads Hermes (a few minutes)."
+      es: "Abre la dirección e inicia sesión con la contraseña de arriba (solo la contraseña, sin usuario). Habla con el bot en Telegram/Discord/Slack. Un token incorrecto aparece en el log de la app. El primer inicio descarga Hermes (unos minutos)."
+  - label: { pt-br: WhatsApp, en: WhatsApp, es: WhatsApp }
+    value:
+      pt-br: "Se ligou o WhatsApp: abra o log do app, localize o QR (fonte monoespaçada) e escaneie em WhatsApp > Aparelhos conectados. Ele expira; reinicie o app para um novo."
+      en: "If you turned WhatsApp on: open the app log, find the QR (monospaced font) and scan it in WhatsApp > Linked devices. It expires; restart the app for a new one."
+      es: "Si activaste WhatsApp: abre el log de la app, localiza el QR (fuente monoespaciada) y escanéalo en WhatsApp > Dispositivos vinculados. Expira; reinicia la app para uno nuevo."

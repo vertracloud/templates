@@ -1,0 +1,274 @@
+# License: Sustainable Use License (internal / non-commercial use).
+id: n8n
+version: 1.0.0
+name: { pt-br: n8n, en: n8n, es: n8n }
+description:
+  pt-br: Automação de workflows com editor visual, nó Code em JavaScript, workers e nós da comunidade.
+  en: Visual workflow automation with a JavaScript Code node, workers and community nodes.
+  es: Automatización de workflows con editor visual, nodo Code en JavaScript, workers y nodos de la comunidad.
+category: automation
+tags: [automation, workflows, webhooks, javascript, queue]
+icon: icon.svg
+landing: n8n
+links:
+  website: https://n8n.io
+  docs: https://docs.n8n.io
+  source: https://github.com/n8n-io/n8n
+  license: https://github.com/n8n-io/n8n/blob/master/LICENSE.md
+
+# Credential encryption key (the SAME on the editor and workers) and the owner password (generated once and shown once;
+# start.sh turns it into a bcrypt hash on every boot).
+secrets: [encryption_key, admin_password]
+
+inputs:
+  - id: owner_email
+    type: email
+    required: true
+    label: { pt-br: "E-mail do administrador (owner)", en: "Administrator (owner) email", es: "Correo del administrador (owner)" }
+    help:
+      pt-br: "A conta de owner é criada no deploy, com este e-mail e a senha gerada (mostrada uma vez nas saídas). Assim ninguém consegue criá-la antes de você abrir o endereço. Para trocar e-mail ou senha depois, mude as variáveis do app."
+      en: "The owner account is created at deploy time, with this email and the generated password (shown once in the outputs). That way nobody can create it before you open the address. To change the email or password later, edit the app variables."
+      es: "La cuenta de owner se crea en el deploy, con este correo y la contraseña generada (se muestra una vez en las salidas). Así nadie puede crearla antes de que abras la dirección. Para cambiar el correo o la contraseña después, edita las variables de la app."
+  - id: mode
+    type: select
+    label: { pt-br: "Como o n8n vai rodar?", en: "How will n8n run?", es: "¿Cómo va a correr n8n?" }
+    help:
+      pt-br: "Escalar com workers (modo fila) usa Postgres e Redis gerenciados e um worker que executa os fluxos, deixando o editor leve. Usa mais RAM do plano (cerca de 3,5 GB no total)."
+      en: "Scaling with workers (queue mode) uses managed Postgres and Redis and a worker that runs the flows, keeping the editor light. It uses more of the plan's RAM (about 3.5 GB in total)."
+      es: "Escalar con workers (modo cola) usa Postgres y Redis administrados y un worker que ejecuta los flujos, dejando el editor liviano. Usa más RAM del plan (cerca de 3,5 GB en total)."
+    default: postgres
+    options:
+      - value: postgres
+        label: { pt-br: "Postgres gerenciado (recomendado)", en: "Managed Postgres (recommended)", es: "Postgres administrado (recomendado)" }
+        sets:
+          services: { db: "on", queue: "off", worker: "off" }
+          env: { app: { DB_TYPE: postgresdb } }
+      - value: sqlite
+        label: { pt-br: "SQLite interno (no disco do app)", en: "Built-in SQLite (on the app disk)", es: "SQLite interno (en el disco de la app)" }
+        sets:
+          services: { db: "off", queue: "off", worker: "off" }
+          env: { app: { DB_TYPE: sqlite } }
+      - value: queue
+        label: { pt-br: "Escalar com workers (Postgres + Redis + worker)", en: "Scale with workers (Postgres + Redis + worker)", es: "Escalar con workers (Postgres + Redis + worker)" }
+        sets:
+          services: { db: "on", queue: "on", worker: "on" }
+          env:
+            app: { DB_TYPE: postgresdb, EXECUTIONS_MODE: queue, OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS: "true", QUEUE_BULL_REDIS_TLS: "true" }
+            worker: { DB_TYPE: postgresdb, EXECUTIONS_MODE: queue, QUEUE_BULL_REDIS_TLS: "true" }
+  - id: concurrency
+    type: number
+    label: { pt-br: "Execuções em paralelo no worker", en: "Parallel executions on the worker", es: "Ejecuciones en paralelo en el worker" }
+    help:
+      pt-br: "Quantos fluxos o worker executa ao mesmo tempo. Mais paralelismo pede mais RAM do worker."
+      en: "How many flows the worker runs at the same time. More parallelism needs more worker RAM."
+      es: "Cuántos flujos ejecuta el worker al mismo tiempo. Más paralelismo pide más RAM del worker."
+    default: 5
+    validation: { min: 1, max: 20 }
+    when: { input: mode, equals: queue }
+  - id: timezone
+    type: select
+    label: { pt-br: Fuso horário dos agendamentos, en: Schedule time zone, es: Zona horaria de las programaciones }
+    default: America/Sao_Paulo
+    options:
+      - { value: America/Sao_Paulo, label: { pt-br: America/Sao_Paulo } }
+      - { value: UTC, label: { pt-br: UTC } }
+      - { value: America/New_York, label: { pt-br: America/New_York } }
+      - { value: Europe/Lisbon, label: { pt-br: Europe/Lisbon } }
+  - id: code_modules
+    type: select
+    label: { pt-br: "Módulos permitidos no nó Code", en: "Modules allowed in the Code node", es: "Módulos permitidos en el nodo Code" }
+    help:
+      pt-br: "Seguro libera só módulos de dados e texto (crypto, url, path, util, zlib, buffer, events...). Todos libera também arquivos, processos e rede dentro do seu próprio container (fs, child_process, http)."
+      en: "Safe allows only data and text modules (crypto, url, path, util, zlib, buffer, events...). All also allows files, processes and network inside your own container (fs, child_process, http)."
+      es: "Seguro libera solo módulos de datos y texto (crypto, url, path, util, zlib, buffer, events...). Todos libera también archivos, procesos y red dentro de tu propio contenedor (fs, child_process, http)."
+    default: safe
+    options:
+      - { value: safe, label: { pt-br: "Seguro (recomendado)", en: "Safe (recommended)", es: "Seguro (recomendado)" } }
+      - { value: all, label: { pt-br: "Todos os módulos", en: "All modules", es: "Todos los módulos" } }
+  - id: email
+    type: select
+    label: { pt-br: "Enviar e-mails do n8n (convites e redefinição de senha)?", en: "Send n8n emails (invitations and password reset)?", es: "¿Enviar correos de n8n (invitaciones y restablecer contraseña)?" }
+    default: none
+    options:
+      - { value: none, label: { pt-br: "Não, configurar depois", en: "No, set it up later", es: "No, configurar después" } }
+      - value: smtp
+        label: { pt-br: "Sim, usar meu servidor SMTP", en: "Yes, use my SMTP server", es: "Sí, usar mi servidor SMTP" }
+        sets: { env: { app: { N8N_EMAIL_MODE: smtp } } }
+  - id: smtp_host
+    type: text
+    required: true
+    label: { pt-br: "Servidor SMTP", en: "SMTP server", es: "Servidor SMTP" }
+    validation: { max_length: 253 }
+    when: { input: email, equals: smtp }
+  - id: smtp_security
+    type: select
+    label: { pt-br: "Segurança da conexão SMTP", en: "SMTP connection security", es: "Seguridad de la conexión SMTP" }
+    default: starttls
+    options:
+      - value: starttls
+        label: { pt-br: "STARTTLS (porta 587)", en: "STARTTLS (port 587)", es: "STARTTLS (puerto 587)" }
+        sets: { env: { app: { N8N_SMTP_SSL: "false", N8N_SMTP_STARTTLS: "true" } } }
+      - value: ssl
+        label: { pt-br: "SSL/TLS direto (porta 465)", en: "Direct SSL/TLS (port 465)", es: "SSL/TLS directo (puerto 465)" }
+        sets: { env: { app: { N8N_SMTP_SSL: "true", N8N_SMTP_STARTTLS: "false" } } }
+      - value: none
+        label: { pt-br: "Sem criptografia (não recomendado)", en: "No encryption (not recommended)", es: "Sin cifrado (no recomendado)" }
+        sets: { env: { app: { N8N_SMTP_SSL: "false", N8N_SMTP_STARTTLS: "false" } } }
+    when: { input: email, equals: smtp }
+  - id: smtp_port
+    type: number
+    label: { pt-br: "Porta SMTP", en: "SMTP port", es: "Puerto SMTP" }
+    default: 587
+    validation: { min: 1, max: 65535 }
+    when: { input: email, equals: smtp }
+  - id: smtp_user
+    type: text
+    label: { pt-br: "Usuário SMTP", en: "SMTP user", es: "Usuario SMTP" }
+    validation: { max_length: 254 }
+    when: { input: email, equals: smtp }
+  - id: smtp_password
+    type: secret
+    label: { pt-br: "Senha SMTP", en: "SMTP password", es: "Contraseña SMTP" }
+    validation: { max_length: 512 }
+    when: { input: email, equals: smtp }
+  - id: smtp_sender
+    type: email
+    required: true
+    label: { pt-br: "E-mail do remetente", en: "Sender email", es: "Correo del remitente" }
+    when: { input: email, equals: smtp }
+
+services:
+  app:
+    source: { type: code, path: src }
+    language: javascript
+    runtime_version: "24.22.1"   # n8n 2.x needs Node >= 24
+    main: start.sh
+    start: sh start.sh
+    ram: { min: 1024, recommended: 2048 }
+    web: required
+    env:
+      N8N_ROLE: main
+      N8N_PORT: "80"   # the port the platform routes web traffic to
+      N8N_ENCRYPTION_KEY: "{{secrets.encryption_key}}"   # stable: a key that differs from the one stored in /app/.n8n/config breaks boot
+      # Owner created at deploy: n8n reapplies these on every start and locks the UI controls. It only accepts a bcrypt hash;
+      # start.sh computes it from VERTRA_OWNER_PASSWORD on every boot and removes the password from the n8n process environment.
+      N8N_INSTANCE_OWNER_MANAGED_BY_ENV: "true"
+      N8N_INSTANCE_OWNER_EMAIL: "{{inputs.owner_email}}"
+      N8N_INSTANCE_OWNER_FIRST_NAME: Admin
+      N8N_INSTANCE_OWNER_LAST_NAME: n8n
+      VERTRA_OWNER_PASSWORD: "{{secrets.admin_password}}"
+      N8N_HOST: "{{app.domain}}"
+      N8N_PROTOCOL: https
+      N8N_EDITOR_BASE_URL: "{{app.url}}"
+      N8N_WEBHOOK_URL: "{{app.url}}"
+      N8N_PROXY_HOPS: "2"   # two proxies in front of the app
+      GENERIC_TIMEZONE: "{{inputs.timezone}}"
+      TZ: "{{inputs.timezone}}"
+      VERTRA_CODE_MODULES: "{{inputs.code_modules}}"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      N8N_HIRING_BANNER_ENABLED: "false"
+      # Retention: without it the execution history fills the database (and /app on SQLite). 7 days or 5000 executions, whichever comes first.
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: "168"
+      EXECUTIONS_DATA_PRUNE_MAX_COUNT: "5000"
+      # DB_TYPE and, in queue mode, EXECUTIONS_MODE/QUEUE_BULL_REDIS_TLS come from the option's `sets`. With the service off, the placeholders below
+      # resolve to empty and the variable is not written (an empty variable beats `_FILE` in n8n).
+      DB_POSTGRESDB_HOST: "{{services.db.host}}"
+      DB_POSTGRESDB_PORT: "{{services.db.port}}"
+      DB_POSTGRESDB_DATABASE: "{{services.db.database}}"
+      DB_POSTGRESDB_USER: "{{services.db.user}}"
+      DB_POSTGRESDB_PASSWORD: "{{services.db.password}}"
+      DB_POSTGRESDB_SSL_CA_FILE: "{{services.db.ssl.ca_path}}"
+      DB_POSTGRESDB_SSL_CERT_FILE: "{{services.db.ssl.cert_path}}"
+      DB_POSTGRESDB_SSL_KEY_FILE: "{{services.db.ssl.key_path}}"
+      # Queue Redis: n8n only enables TLS; the client certificate comes from the preload in start.sh (redis-tls-client.cjs).
+      QUEUE_BULL_REDIS_HOST: "{{services.queue.host}}"
+      QUEUE_BULL_REDIS_PORT: "{{services.queue.port}}"
+      QUEUE_BULL_REDIS_USERNAME: "{{services.queue.user}}"
+      QUEUE_BULL_REDIS_PASSWORD: "{{services.queue.password}}"
+      VERTRA_TLS_CLIENT_HOST: "{{services.queue.host}}"
+      VERTRA_TLS_CLIENT_CA: "{{services.queue.ssl.ca_path}}"
+      VERTRA_TLS_CLIENT_CERT: "{{services.queue.ssl.cert_path}}"
+      VERTRA_TLS_CLIENT_KEY: "{{services.queue.ssl.key_path}}"
+      # Email (email=smtp only; N8N_EMAIL_MODE, N8N_SMTP_SSL and N8N_SMTP_STARTTLS come from `sets`).
+      N8N_SMTP_HOST: "{{inputs.smtp_host}}"
+      N8N_SMTP_PORT: "{{inputs.smtp_port}}"
+      N8N_SMTP_USER: "{{inputs.smtp_user}}"
+      N8N_SMTP_PASS: "{{inputs.smtp_password}}"
+      N8N_SMTP_SENDER: "{{inputs.smtp_sender}}"
+    healthcheck: { path: /healthz/readiness, timeout: 240 }   # /healthz opens before migrations; only /healthz/readiness waits for the database
+    deploy:
+      zero_downtime: { default: "off", locked: true }   # in queue mode both copies would claim the leader role and polling/webhook triggers would run twice
+      auto_rollback: { default: true }
+      rollback: { with_data: required }   # n8n migrates the database on upgrade
+  worker:
+    source: { type: code, path: src }   # same code as the app
+    language: javascript
+    runtime_version: "24.22.1"
+    main: start.sh
+    start: sh start.sh
+    ram: { min: 1024, recommended: 1024 }
+    web: none
+    env:
+      N8N_ROLE: worker
+      N8N_WORKER_CONCURRENCY: "{{inputs.concurrency}}"
+      N8N_ENCRYPTION_KEY: "{{secrets.encryption_key}}"
+      N8N_HOST: "{{services.app.domain}}"
+      N8N_PROTOCOL: https
+      N8N_EDITOR_BASE_URL: "{{services.app.url}}"
+      N8N_WEBHOOK_URL: "{{services.app.url}}"
+      GENERIC_TIMEZONE: "{{inputs.timezone}}"
+      TZ: "{{inputs.timezone}}"
+      VERTRA_CODE_MODULES: "{{inputs.code_modules}}"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      DB_POSTGRESDB_HOST: "{{services.db.host}}"
+      DB_POSTGRESDB_PORT: "{{services.db.port}}"
+      DB_POSTGRESDB_DATABASE: "{{services.db.database}}"
+      DB_POSTGRESDB_USER: "{{services.db.user}}"
+      DB_POSTGRESDB_PASSWORD: "{{services.db.password}}"
+      DB_POSTGRESDB_SSL_CA_FILE: "{{services.db.ssl.ca_path}}"
+      DB_POSTGRESDB_SSL_CERT_FILE: "{{services.db.ssl.cert_path}}"
+      DB_POSTGRESDB_SSL_KEY_FILE: "{{services.db.ssl.key_path}}"
+      QUEUE_BULL_REDIS_HOST: "{{services.queue.host}}"
+      QUEUE_BULL_REDIS_PORT: "{{services.queue.port}}"
+      QUEUE_BULL_REDIS_USERNAME: "{{services.queue.user}}"
+      QUEUE_BULL_REDIS_PASSWORD: "{{services.queue.password}}"
+      VERTRA_TLS_CLIENT_HOST: "{{services.queue.host}}"
+      VERTRA_TLS_CLIENT_CA: "{{services.queue.ssl.ca_path}}"
+      VERTRA_TLS_CLIENT_CERT: "{{services.queue.ssl.cert_path}}"
+      VERTRA_TLS_CLIENT_KEY: "{{services.queue.ssl.key_path}}"
+    healthcheck: { timeout: 120 }   # no web: relies on the ready-gate (the worker exposes no port)
+    deploy:
+      zero_downtime: { default: "off", locked: true }   # updates together with the app (same n8n version on editor and worker)
+      auto_rollback: { default: true }
+      rollback: { with_data: required }
+    # Enabled and disabled by the `mode` option's `sets`.
+  db:
+    database: postgres
+    ram: { min: 1024, recommended: 1024 }
+    # Enabled by the option's `sets` (postgres and queue): a `when` condition only accepts one equality.
+  queue:
+    database: redis
+    ram: { min: 512, recommended: 512 }
+    when: { input: mode, equals: queue }
+
+permissions:
+  code: { view: true, edit: false }   # the code is open to read; editing it would detach the app from the template updates
+  ram: { change: true, below_min: false, above_max: true }
+
+outputs:
+  - { label: { pt-br: Endereço, en: Address, es: Dirección }, value: "{{app.url}}" }
+  - { label: { pt-br: E-mail do owner, en: Owner email, es: Correo del owner }, value: "{{inputs.owner_email}}" }
+  - label: { pt-br: Senha do owner, en: Owner password, es: Contraseña del owner }
+    value: "{{secrets.admin_password}}"
+    secret: true
+    once: true
+  - label: { pt-br: Próximo passo, en: Next step, es: Siguiente paso }
+    value:
+      pt-br: "Abra o endereço e entre com o e-mail e a senha acima (a conta de owner já existe; guarde a senha, ela é mostrada uma vez). O nó Code roda em JavaScript; nós da comunidade se instalam em Configurações > Nós da comunidade."
+      en: "Open the address and sign in with the email and password above (the owner account already exists; keep the password, it is shown once). The Code node runs JavaScript; community nodes are installed in Settings > Community nodes."
+      es: "Abre la dirección e inicia sesión con el correo y la contraseña de arriba (la cuenta de owner ya existe; guarda la contraseña, se muestra una vez). El nodo Code corre JavaScript; los nodos de la comunidad se instalan en Configuración > Nodos de la comunidad."

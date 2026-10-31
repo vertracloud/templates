@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.DS_Store
+# packages never carry secrets
+.env
+.env.*

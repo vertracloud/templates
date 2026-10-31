@@ -1,0 +1,22 @@
+{
+  "name": "vertracloud-templates",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Catalog of one-click templates for Vertra Cloud: manifests, images, docs and the packaging scripts.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "validate": "node scripts/validate.mjs",
+    "pack": "node scripts/pack.mjs",
+    "test": "node --test scripts/check.test.mjs scripts/ci.test.mjs"
+  },
+  "devDependencies": {
+    "@vertracloud/api-types": "^0.5.4",
+    "adm-zip": "^0.5.16",
+    "ajv": "^8.17.1",
+    "js-yaml": "^4.1.1"
+  }
+}

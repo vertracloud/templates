@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "pages": [
+    {
+      "id": "first-steps",
+      "title": {
+        "pt-br": "Primeiros passos",
+        "en": "First steps",
+        "es": "Primeros pasos"
+      },
+      "files": {
+        "pt-br": "first-steps.md",
+        "en": "first-steps.en.md",
+        "es": "first-steps.es.md"
+      }
+    },
+    {
+      "id": "reference",
+      "title": {
+        "pt-br": "Referência: variáveis, recursos e problemas comuns",
+        "en": "Reference: variables, resources and common problems",
+        "es": "Referencia: variables, recursos y problemas comunes"
+      },
+      "files": {
+        "pt-br": "reference.md",
+        "en": "reference.en.md",
+        "es": "reference.es.md"
+      }
+    }
+  ]
+}
