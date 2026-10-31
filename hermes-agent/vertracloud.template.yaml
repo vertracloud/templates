@@ -1,12 +1,12 @@
 id: hermes-agent
-version: 1.0.0
+version: 1.0.1
 name: { pt-br: Hermes Agent, en: Hermes Agent, es: Hermes Agent }
 description:
-  pt-br: Agente de IA que aprende com o uso, com chat no navegador e canais (Telegram, Discord, Slack, WhatsApp, e-mail).
-  en: AI agent that learns from use, with browser chat and channels (Telegram, Discord, Slack, WhatsApp, email).
-  es: Agente de IA que aprende con el uso, con chat en el navegador y canales (Telegram, Discord, Slack, WhatsApp, correo).
+  pt-br: Agente de IA que aprende com o uso, com painel, chat no navegador e canais (Telegram, Discord, Slack, WhatsApp, e-mail).
+  en: AI agent that learns from use, with panel, browser chat and channels (Telegram, Discord, Slack, WhatsApp, email).
+  es: Agente de IA que aprende con el uso, con panel, chat en el navegador y canales (Telegram, Discord, Slack, WhatsApp, correo).
 category: ai-agents
-tags: [ai, agent, assistant, chat, whatsapp, telegram, discord, slack, python]
+tags: [ai, agent, assistant, dashboard, whatsapp, telegram, discord, slack, python]
 icon: icon.png
 landing: hermes-agent
 byok: true
@@ -16,7 +16,6 @@ links:
   source: https://github.com/NousResearch/hermes-agent
   license: https://github.com/NousResearch/hermes-agent/blob/main/LICENSE   # MIT (Nous Research); optional chat: github.com/nesquena/hermes-webui (MIT)
 
-# Browser chat password (its own login), generated once and shown once.
 secrets: [admin_password]
 
 inputs:
@@ -24,13 +23,12 @@ inputs:
     type: select
     label: { pt-br: "Qual provedor de modelo você vai usar?", en: "Which model provider will you use?", es: "¿Qué proveedor de modelo vas a usar?" }
     help:
-      pt-br: O provedor e o modelo escolhidos aqui valem a cada início do app (a variável manda). Para trocar, mude as variáveis do app. O Hermes aceita dezenas de outros provedores, configuráveis nas configurações do chat.
-      en: The provider and model chosen here apply on every app start (the variable wins). To change them, edit the app variables. Hermes supports dozens of other providers, configurable in the chat settings.
-      es: El proveedor y el modelo elegidos aquí valen en cada inicio de la app (manda la variable). Para cambiarlos, edita las variables de la app. Hermes admite decenas de otros proveedores, configurables en los ajustes del chat.
+      pt-br: O provedor e o modelo escolhidos aqui valem a cada início do app (a variável manda). Para trocar, mude as variáveis do app. O Hermes aceita dezenas de outros provedores, configuráveis no painel.
+      en: The provider and model chosen here apply on every app start (the variable wins). To change them, edit the app variables. Hermes supports dozens of other providers, configurable in the panel.
+      es: El proveedor y el modelo elegidos aquí valen en cada inicio de la app (manda la variable). Para cambiarlos, edita las variables de la app. Hermes admite decenas de otros proveedores, configurables en el panel.
     default: openrouter
     options:
-      # Hermes provider names. `openai` is an alias of `custom` + https://api.openai.com/v1.
-      # Model ids from the Hermes provider docs.
+      # `openai` is an alias of `custom` + https://api.openai.com/v1.
       - value: openrouter
         label: { pt-br: "OpenRouter (qualquer modelo)", en: "OpenRouter (any model)", es: "OpenRouter (cualquier modelo)" }
         sets: { env: { app: { OPENROUTER_API_KEY: "{{inputs.api_key}}", HERMES_MODEL_PROVIDER: openrouter, HERMES_MODEL: "anthropic/claude-sonnet-4.5" } } }
@@ -71,15 +69,14 @@ inputs:
     validation: { regex: "^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$", max_length: 128 }
   - id: webui
     type: boolean
-    default: true
-    label: { pt-br: "Chat no navegador (Hermes WebUI)", en: "Browser chat (Hermes WebUI)", es: "Chat en el navegador (Hermes WebUI)" }
+    default: false
+    label: { pt-br: "Quero também o chat no navegador (Hermes WebUI)", en: "I also want the browser chat (Hermes WebUI)", es: "Quiero también el chat en el navegador (Hermes WebUI)" }
     help:
-      pt-br: "Chat com sessões, arquivos e configurações, protegido pela senha gerada. Custa ~150 MB de RAM. Desligado, o app só atende pelos canais e a página responde apenas uma nota."
-      en: "Chat with sessions, files and settings, protected by the generated password. Costs ~150 MB of RAM. Off, the app only answers through its channels and the page returns just a note."
-      es: "Chat con sesiones, archivos y ajustes, protegido por la contraseña generada. Cuesta ~150 MB de RAM. Desactivado, la app solo responde por sus canales y la página devuelve solo una nota."
+      pt-br: "Chat com sessões, arquivos e configurações, em / (o painel fica em /admin). O painel já tem um chat de terminal em /admin/chat. Custa ~150 MB de RAM."
+      en: "Chat with sessions, files and settings, at / (the panel stays at /admin). The panel already has a terminal chat at /admin/chat. Costs ~150 MB of RAM."
+      es: "Chat con sesiones, archivos y ajustes, en / (el panel queda en /admin). El panel ya trae un chat de terminal en /admin/chat. Cuesta ~150 MB de RAM."
 
-  # Optional channels. Each needs an allowlist (GATEWAY_ALLOW_ALL_USERS stays false).
-  # Signal (needs an external signal-cli daemon), Matrix, Mattermost and others: app variables (see README).
+  # Each channel needs an allowlist (GATEWAY_ALLOW_ALL_USERS stays false).
   - id: telegram
     type: boolean
     default: false
@@ -144,17 +141,17 @@ inputs:
   - id: whatsapp
     type: boolean
     default: false
-    label: { pt-br: "Conectar ao WhatsApp (pareamento por QR no log do app)", en: "Connect to WhatsApp (QR pairing in the app log)", es: "Conectar a WhatsApp (emparejamiento por QR en el log de la app)" }
+    label: { pt-br: "Conectar ao WhatsApp (pareamento por QR no painel ou no log)", en: "Connect to WhatsApp (QR pairing in the panel or the log)", es: "Conectar a WhatsApp (emparejamiento por QR en el panel o el log)" }
     help:
-      pt-br: "Baixa o Node.js (arquivo oficial, com SHA-256 conferido) e usa a ponte Baileys. O QR sai no log do app depois do deploy. Ponte não oficial: o WhatsApp pode restringir o número; para a API oficial da Meta veja o README."
-      en: "Downloads Node.js (official archive, SHA-256 checked) and uses the Baileys bridge. The QR shows in the app log after the deploy. Unofficial bridge: WhatsApp may restrict the number; for Meta's official API see the README."
-      es: "Descarga Node.js (archivo oficial, con SHA-256 verificado) y usa el puente Baileys. El QR sale en el log de la app tras el deploy. Puente no oficial: WhatsApp puede restringir el número; para la API oficial de Meta mira el README."
+      pt-br: "Usa a ponte Baileys (não oficial: o WhatsApp pode restringir o número; para a API oficial da Meta veja o README). O QR aparece em /admin/channels e também no log do app depois do deploy."
+      en: "Uses the Baileys bridge (unofficial: WhatsApp may restrict the number; for Meta's official API see the README). The QR shows at /admin/channels and also in the app log after the deploy."
+      es: "Usa el puente Baileys (no oficial: WhatsApp puede restringir el número; para la API oficial de Meta mira el README). El QR aparece en /admin/channels y también en el log de la app tras el deploy."
   - id: whatsapp_users
     type: text
     required: true
     when: { input: whatsapp, equals: true }
     label: { pt-br: "Quem pode falar com o agente (números com DDI, só dígitos, separados por vírgula)", en: "Who can talk to the agent (numbers with country code, digits only, comma-separated)", es: "Quién puede hablar con el agente (números con código de país, solo dígitos, separados por coma)" }
-    help: { pt-br: "Ex.: 5511999999999. O QR aparece no log do app depois do deploy.", en: "E.g.: 5511999999999. The QR shows in the app log after the deploy.", es: "Ej.: 5511999999999. El QR aparece en el log de la app tras el deploy." }
+    help: { pt-br: "Ex.: 5511999999999. O QR aparece em /admin/channels (e no log do app) depois do deploy.", en: "E.g.: 5511999999999. The QR shows at /admin/channels (and in the app log) after the deploy.", es: "Ej.: 5511999999999. El QR aparece en /admin/channels (y en el log de la app) tras el deploy." }
     validation: { regex: "^[0-9][0-9,\\s]*$", max_length: 200 }
 
   - id: email
@@ -210,21 +207,20 @@ inputs:
 
 services:
   app:
-    # Code template: src/ has the entrypoint and the pinned dependencies; the Hermes Agent and WebUI sources are downloaded by commit
-    # (SHA-256 checked) on the first start. The Hermes dashboard needs Node to build, so it is not part of this template.
+    # Sources, Node.js and Caddy are downloaded on the first start (SHA-256 checked); the dashboard is built from source. Caddy is the only login.
     source: { type: code, path: src }
     language: python
     runtime_version: "3.14.10"
     main: start.py
-    start: python3 -u start.py   # code apps listen on port 80; start.py passes it on to the WebUI
-    # About 0.55 GiB idle; headroom for extra agents and the terminal tool.
-    ram: { min: 1536, recommended: 2048 }
+    start: python3 -u start.py
+    ram: { min: 2048, recommended: 3072 }
     web: required
     env:
       HERMES_HOME: /app/.hermes
-      PIP_NO_DEPS: "1"   # requirements.txt is the full hashed lock; pip would refuse upstream's own override (Pillow 13)
+      PIP_NO_DEPS: "1"   # requirements.txt is the full lock; pip would refuse upstream's Pillow override
       HERMES_WEBUI: "{{inputs.webui}}"
-      HERMES_ADMIN_PASSWORD: "{{secrets.admin_password}}"   # becomes a hash at the start and is removed from the process environment
+      HERMES_ADMIN_USER: admin
+      HERMES_ADMIN_PASSWORD: "{{secrets.admin_password}}"   # kept only as Caddy's hash
       PUBLIC_ORIGIN: "{{app.url}}"
       GATEWAY_ALLOW_ALL_USERS: "false"
       HERMES_MODEL_CUSTOM: "{{inputs.model}}"   # empty = the provider option's default
@@ -247,8 +243,7 @@ services:
       EMAIL_TRUST_FROM_HEADER: "false"   # true would trust a forged From: and let anyone command the agent
       EMAIL_ALLOW_ALL_USERS: "false"
       # provider, default model and key come from the `sets` of the selected `provider` option.
-    # First start: dependencies, then the source downloads (about 120 MB; Node.js too with WhatsApp) and the skills sync.
-    healthcheck: { path: /health, timeout: 420 }   # 200 with counters only (no password, no data)
+    healthcheck: { path: /healthz, timeout: 900 }   # answered by Caddy, before the dashboard build ends
     deploy:
       zero_downtime: { default: off, locked: true }   # the second copy exits with code 1 (gateway already running)
       auto_rollback: { default: true }
@@ -259,19 +254,21 @@ permissions:
   ram: { change: true, below_min: false, above_max: true }
 
 outputs:
-  - label: { pt-br: Chat, en: Chat, es: Chat }
-    value: "{{app.url}}"
+  - label: { pt-br: Painel, en: Panel, es: Panel }
+    value: "{{app.url}}/admin/"
+  - label: { pt-br: Usuário, en: User, es: Usuario }
+    value: admin
   - label: { pt-br: Senha, en: Password, es: Contraseña }
     value: "{{secrets.admin_password}}"
     secret: true
     once: true
   - label: { pt-br: Próximo passo, en: Next step, es: Siguiente paso }
     value:
-      pt-br: "Abra o endereço e entre com a senha acima (só a senha; sem usuário). Fale com o bot no Telegram/Discord/Slack. Token errado aparece no log do app. A primeira inicialização baixa o Hermes (alguns minutos)."
-      en: "Open the address and sign in with the password above (password only, no user). Talk to the bot on Telegram/Discord/Slack. A wrong token shows in the app log. The first start downloads Hermes (a few minutes)."
-      es: "Abre la dirección e inicia sesión con la contraseña de arriba (solo la contraseña, sin usuario). Habla con el bot en Telegram/Discord/Slack. Un token incorrecto aparece en el log de la app. El primer inicio descarga Hermes (unos minutos)."
+      pt-br: "Abra o painel com o usuário e a senha acima (o chat em / usa o mesmo login, se você o ligou). O primeiro início monta o painel e leva alguns minutos. Fale com o bot no Telegram/Discord/Slack. Token errado aparece no log do app."
+      en: "Open the panel with the user and password above (the chat at / uses the same login, if you turned it on). The first start builds the panel and takes a few minutes. Talk to the bot on Telegram/Discord/Slack. A wrong token shows in the app log."
+      es: "Abre el panel con el usuario y la contraseña de arriba (el chat en / usa el mismo login, si lo activaste). El primer inicio compila el panel y tarda unos minutos. Habla con el bot en Telegram/Discord/Slack. Un token incorrecto aparece en el log de la app."
   - label: { pt-br: WhatsApp, en: WhatsApp, es: WhatsApp }
     value:
-      pt-br: "Se ligou o WhatsApp: abra o log do app, localize o QR (fonte monoespaçada) e escaneie em WhatsApp > Aparelhos conectados. Ele expira; reinicie o app para um novo."
-      en: "If you turned WhatsApp on: open the app log, find the QR (monospaced font) and scan it in WhatsApp > Linked devices. It expires; restart the app for a new one."
-      es: "Si activaste WhatsApp: abre el log de la app, localiza el QR (fuente monoespaciada) y escanéalo en WhatsApp > Dispositivos vinculados. Expira; reinicia la app para uno nuevo."
+      pt-br: "Se ligou o WhatsApp: abra /admin/channels > WhatsApp e escaneie o QR (ele expira); o QR também sai no log do app. Reinicie o app para um novo."
+      en: "If you turned WhatsApp on: open /admin/channels > WhatsApp and scan the QR (it expires); the QR is also in the app log. Restart the app for a new one."
+      es: "Si activaste WhatsApp: abre /admin/channels > WhatsApp y escanea el QR (expira); el QR también sale en el log de la app. Reinicia la app para uno nuevo."

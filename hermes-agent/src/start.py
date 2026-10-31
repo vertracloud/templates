@@ -1,14 +1,7 @@
 #!/usr/bin/env python3
-"""Hermes Agent entrypoint.
-
-On the first start the pinned sources (Hermes Agent and, optionally, the Hermes WebUI) are downloaded from GitHub by commit, checked against
-a SHA-256 and unpacked under /app; the dependencies come from requirements.txt. State lives in /app/.hermes. It then runs the gateway and
-the WebUI, whose own login is the only door. With WhatsApp on it also downloads Node.js (SHA-256 checked) for the bridge and prints the pairing QR
-in the app log. The Hermes dashboard is not started: its frontend needs Node to build and it has no login of its own.
-"""
+"""Hermes Agent entrypoint: downloads the pinned sources on the first start (SHA-256 checked), builds the dashboard, then runs Caddy (the only
+public port and login), the gateway, the dashboard and, optionally, the WebUI. State lives in /app/.hermes."""
 import hashlib
-import http.server
-import json
 import os
 import platform
 import shutil
@@ -21,13 +14,11 @@ import time
 import urllib.request
 from pathlib import Path
 
-# Pinned sources (Hermes is tag v0.22.5). To upgrade, change commit and sha256 together, and requirements.txt.
+# Hermes is tag v0.22.5; to upgrade, change the pins together with requirements.txt.
 HERMES = {"repo": "NousResearch/hermes-agent", "commit": "bf0203a794a07aac3ff764972ab9087baa4e4f4e", "sha256": "0dc2cca54657d162845a77f634e107c61c3fb0bd6c8505212aa2e200591b7cc9"}
 WEBUI = {"repo": "nesquena/hermes-webui", "commit": "687d80333870c3797d6858738621fca13d1bf27a", "sha256": "bde1ee26c90da3988164874c623fde293a9d1b1e7104544f2cbae25753ded341"}
-# Top-level folders left out of the unpacked tree (tests, desktop apps, frontends, docs site).
-HERMES_SKIP = {"tests", "apps", "ui-tui", "web", "evals", ".github", "nix", "contributors", "assets", "website"}
+HERMES_SKIP = {"tests", "evals", ".github", "nix", "contributors", "assets", "website"}
 WEBUI_SKIP = {"tests", "docs", ".github"}
-# Official Node.js build from nodejs.org (SHASUMS256.txt), downloaded only when WhatsApp is on.
 NODE = {"version": "24.22.2", "sha256": {"x64": "48cc0e21e048790e54c0cf5749c2725005313d652651c40b7a21feb9697aaf75", "arm64": "eb187837a2230d4047161ac0be008584e16b46f726e9c9490ee35dc6b17d9ba8"}}
 
 APP = Path("/app")
@@ -36,9 +27,15 @@ HERMES_DIR = APP / "hermes-agent"
 WEBUI_DIR = APP / "hermes-webui"
 STATE_DIR = HERMES_HOME / "webui"
 NODE_DIR = APP / ".local" / "node"
+CADDY_DIR = APP / ".local" / "caddy"
+WEB_DIST = APP / "hermes-web"
+TUI_DIR = APP / "hermes-tui"
 WA_SESSION = HERMES_HOME / "platforms" / "whatsapp" / "session"
 PORT = int(os.environ.get("PORT") or 80)
 PASSWORD_VAR = "HERMES_ADMIN_PASSWORD"
+HASH_VAR = "VERTRA_CADDY_HASH"
+# SHA-256 of the release .tar.gz (the release itself lists SHA-512).
+CADDY = {"version": "2.11.7", "sha256": {"amd64": "727b91701a392de6ebc5027509f548bf39979e5216340d0faed8fa5e69c84f8b", "arm64": "d8fc6d179a5d283028a472a5618564f6ad8a86fed513e64f032b3b0b7cc45e42"}}
 
 
 def log(msg):
@@ -58,39 +55,8 @@ def write_private(path, text):
     os.replace(tmp, path)
 
 
-def seed_webui_password(password):
-    """Stores the login as the hash the WebUI's Settings would write (PBKDF2-SHA256, 600k rounds, salted with .pbkdf2_key), so the
-    password never stays in the environment of the agent's processes."""
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
-    key_file = STATE_DIR / ".pbkdf2_key"
-    key = key_file.read_bytes()[:32] if key_file.exists() else b""
-    if len(key) < 32:
-        key = os.urandom(32)
-        key_file.write_bytes(key)
-        key_file.chmod(0o600)
-    settings_file = STATE_DIR / "settings.json"
-    try:
-        settings = json.loads(settings_file.read_text())
-        if not isinstance(settings, dict):
-            settings = {}
-    except (OSError, ValueError):
-        settings = {}
-    settings["password_hash"] = hashlib.pbkdf2_hmac("sha256", password.encode(), key, 600_000).hex()
-    # Any other key in settings.json makes the WebUI hide channel sessions by default; keep the first-run default.
-    settings.setdefault("show_cli_sessions", True)
-    write_private(settings_file, json.dumps(settings))
-
-
-def has_webui_password():
-    try:
-        return bool(json.loads((STATE_DIR / "settings.json").read_text()).get("password_hash"))
-    except (OSError, ValueError, AttributeError):
-        return False
-
-
-def fetch(label, url, sha256, dest, keep):
-    """Downloads an archive, checks the SHA-256 and unpacks it into dest, dropping the first path component and every path `keep` refuses.
-    Done once: a marker with the pin tells the next start there is nothing to do."""
+def fetch(label, url, sha256, dest, keep, strip=True):
+    """Downloads, checks the SHA-256 and unpacks into dest (only paths `keep` accepts); the pin marker makes later starts a no-op."""
     marker = dest / ".vertra-pin"
     want = f"{url} {sha256}"
     try:
@@ -123,7 +89,7 @@ def fetch(label, url, sha256, dest, keep):
         sys.exit(70)
 
     def accept(member, path):
-        parts = member.name.split("/", 1)
+        parts = member.name.split("/", 1) if strip else ["", member.name]
         if len(parts) < 2 or not keep(parts[1]):
             return None
         return tarfile.data_filter(member, path)
@@ -131,7 +97,7 @@ def fetch(label, url, sha256, dest, keep):
     staging = work / "tree"
     with tarfile.open(archive) as tar:
         tar.extractall(staging, filter=accept)
-    (root,) = [p for p in staging.iterdir() if p.is_dir()]
+    (root,) = [p for p in staging.iterdir() if p.is_dir()] if strip else [staging]
     (root / ".vertra-pin").write_text(want)
     shutil.rmtree(dest, ignore_errors=True)
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -142,11 +108,10 @@ def fetch(label, url, sha256, dest, keep):
 
 def fetch_github(pin, dest, skip):
     fetch(f"{pin['repo']}@{pin['commit'][:12]}", f"https://github.com/{pin['repo']}/archive/{pin['commit']}.tar.gz", pin["sha256"], dest,
-          lambda rel: rel.split("/", 1)[0] not in skip)
+          lambda rel: rel.split("/", 1)[0] not in skip and (not rel.startswith("apps/") or rel.startswith("apps/shared")))
 
 
 def fetch_node():
-    """Node.js (only for the WhatsApp bridge): official build, only what the bridge needs (node, npm, npx)."""
     arch = {"x86_64": "x64", "aarch64": "arm64"}.get(platform.machine())
     if arch is None:
         log(f"no Node.js build pinned for {platform.machine()}")
@@ -154,6 +119,139 @@ def fetch_node():
     name = f"node-v{NODE['version']}-linux-{arch}"
     fetch(f"Node.js v{NODE['version']} ({arch})", f"https://nodejs.org/dist/v{NODE['version']}/{name}.tar.xz", NODE["sha256"][arch], NODE_DIR,
           lambda rel: rel in ("bin/node", "bin/npm", "bin/npx", "LICENSE") or rel.startswith("lib/node_modules/npm/"))
+
+
+def fetch_caddy():
+    arch = {"x86_64": "amd64", "aarch64": "arm64"}.get(platform.machine())
+    if arch is None:
+        log(f"no Caddy build pinned for {platform.machine()}")
+        sys.exit(70)
+    v = CADDY["version"]
+    fetch(f"Caddy v{v} ({arch})", f"https://github.com/caddyserver/caddy/releases/download/v{v}/caddy_{v}_linux_{arch}.tar.gz", CADDY["sha256"][arch],
+          CADDY_DIR, lambda rel: rel == "caddy", strip=False)
+
+
+def build_frontends(env):
+    """Builds the dashboard and its terminal chat once per Hermes/Node pin, then drops the sources and node_modules."""
+    stamp = f"{HERMES['commit']} node{NODE['version']}"
+    done = WEB_DIST / ".vertra-build"
+    try:
+        if done.read_text() == stamp and (WEB_DIST / "index.html").is_file() and (TUI_DIR / "dist" / "entry.js").is_file():
+            return True
+    except OSError:
+        pass
+    if not (HERMES_DIR / "web" / "package.json").is_file():
+        log("the dashboard sources are gone and its build is missing; delete /app/hermes-agent and restart")
+        return False
+    log("building the dashboard (first start only)")
+    benv = dict(env, CI="1", npm_config_cache=str(APP / ".cache" / "npm"), HERMES_PYTHON=sys.executable, HERMES_WEB_BUILD_LIGHT="1", NODE_OPTIONS="--max-old-space-size=1024")
+    node = str(NODE_DIR / "bin" / "node")
+    steps = (
+        ("dependencies", ["scripts/build/node-deps.mjs", "--source", str(HERMES_DIR), "--workspace", "ui-tui", "--workspace", "web"]),
+        ("terminal chat", ["scripts/build/tui.mjs", "--source", str(HERMES_DIR), "--out", str(TUI_DIR)]),
+        ("dashboard", ["scripts/build/web.mjs", "--source", str(HERMES_DIR), "--icons", str(HERMES_DIR), "--out", str(WEB_DIST)]),
+    )
+    shutil.rmtree(TUI_DIR, ignore_errors=True)
+    shutil.rmtree(WEB_DIST, ignore_errors=True)
+    for what, args in steps:
+        started = time.time()
+        if subprocess.run([node, *args], cwd=HERMES_DIR, env=benv).returncode != 0:
+            log(f"building the dashboard failed at: {what}; it stays off until the next start")
+            return False
+        log(f"dashboard build: {what} done in {round(time.time() - started)}s")
+    for sub in ("node_modules", "web", "ui-tui", "apps"):
+        shutil.rmtree(HERMES_DIR / sub, ignore_errors=True)
+    shutil.rmtree(APP / ".cache" / "npm", ignore_errors=True)
+    done.write_text(stamp)
+    return True
+
+
+def write_caddyfile(webui):
+    """Basic once, then a session cookie (browsers send no Basic on WebSocket or EventSource), for /admin (9119) and the chat at / (8787)."""
+    root = "reverse_proxy 127.0.0.1:8787" if webui else "redir * /admin/ 302"
+    text = """{
+  admin off
+  auto_https off
+  persist_config off
+}
+# The dashboard only accepts its own loopback Host and Origin.
+(dash) {
+  reverse_proxy 127.0.0.1:9119 {
+    header_up Host 127.0.0.1:9119
+    header_up Origin http://127.0.0.1:9119
+  }
+}
+:%(port)s {
+  # Own-origin frames stay allowed for the chat's sandboxed HTML preview.
+  @ownframe expression "({http.request.header.Sec-Fetch-Dest} == 'iframe' || {http.request.header.Sec-Fetch-Dest} == 'frame') && {http.request.header.Sec-Fetch-Site} == 'same-origin'"
+  @otherframe expression "!(({http.request.header.Sec-Fetch-Dest} == 'iframe' || {http.request.header.Sec-Fetch-Dest} == 'frame') && {http.request.header.Sec-Fetch-Site} == 'same-origin')"
+  header @ownframe {
+    defer
+    X-Frame-Options SAMEORIGIN
+    +Content-Security-Policy "frame-ancestors 'self'"
+  }
+  header @otherframe {
+    defer
+    X-Frame-Options DENY
+    +Content-Security-Policy "frame-ancestors 'none'"
+  }
+  handle /healthz {
+    respond "ok" 200
+  }
+  handle {
+    route {
+      # Sibling apps share a registrable domain, so SameSite alone does not stop them from framing this one.
+      @framed expression "({http.request.header.Sec-Fetch-Dest} == 'iframe' || {http.request.header.Sec-Fetch-Dest} == 'frame' || {http.request.header.Sec-Fetch-Dest} == 'embed' || {http.request.header.Sec-Fetch-Dest} == 'object') && {http.request.header.Sec-Fetch-Site} != 'same-origin'"
+      respond @framed 403
+      @badorigin {
+        header Origin *
+        expression "{http.request.header.Origin} != 'https://' + {http.request.hostport} && {http.request.header.Origin} != 'http://' + {http.request.hostport}"
+      }
+      respond @badorigin 403
+      @xsite_nonget {
+        header Sec-Fetch-Site cross-site
+        header Sec-Fetch-Site same-site
+        not method GET
+      }
+      respond @xsite_nonget 403
+      @xsite_nonnav {
+        header Sec-Fetch-Site cross-site
+        header Sec-Fetch-Site same-site
+        not header Sec-Fetch-Mode navigate
+      }
+      respond @xsite_nonnav 403
+      # Only page navigation gets the password prompt.
+      @anon {
+        not header Authorization *
+        not header Cookie *vertra_hermes={env.SESSION_TOKEN}*
+        header Sec-Fetch-Mode *
+        not header Sec-Fetch-Mode navigate
+      }
+      respond @anon 401
+      @nocookie not header Cookie *vertra_hermes={env.SESSION_TOKEN}*
+      basic_auth @nocookie {
+        {env.ADMIN_USER} {env.HASH}
+      }
+      header @nocookie +Set-Cookie "vertra_hermes={env.SESSION_TOKEN}; {env.COOKIE_ATTRS}"
+      redir /admin /admin/ 308
+      handle_path /admin/* {
+        request_header X-Forwarded-Prefix /admin
+        import dash
+      }
+      @dashassets path /assets/* /fonts/* /fonts-terminal/* /shared/*
+      handle @dashassets {
+        import dash
+      }
+      handle {
+        %(root)s
+      }
+    }
+  }
+}
+""" % {"port": PORT, "root": root}
+    path = APP / ".cache" / "vertra" / "Caddyfile"
+    write_private(path, text)
+    return path
 
 
 def run_quiet(args, env, what):
@@ -179,7 +277,7 @@ def seed_home(env):
     def config_set(key, value):
         run_quiet([sys.executable, "-m", "hermes_cli.main", "config", "set", key, value], env, f"config set {key}")
 
-    # Provider and model are applied on every boot, so the variables win over edits to these keys in config.yaml.
+    # The variables win over edits to these keys in config.yaml.
     provider = env.get("HERMES_MODEL_PROVIDER", "")
     model = env.get("HERMES_MODEL_CUSTOM") or env.get("HERMES_MODEL", "")
     if provider:
@@ -189,15 +287,14 @@ def seed_home(env):
         if provider == "openrouter":
             config_set("model.base_url", "https://openrouter.ai/api/v1")
         elif provider == "custom":
-            # The key is referenced by variable name, never written to the config.
+            # The key is referenced by variable name, not written to the config.
             if env.get("HERMES_BASE_URL"):
                 config_set("model.base_url", env["HERMES_BASE_URL"])
             config_set("model.key_env", "OPENAI_COMPAT_API_KEY")
         else:
-            # The seed config points base_url at OpenRouter.
             config_set("model.base_url", "")
 
-    # Loopback api_server key (schedules), kept in the volume .env.
+    # Loopback api_server key for schedules.
     env_file = HERMES_HOME / ".env"
     lines = env_file.read_text().splitlines() if env_file.exists() else []
     if not env.get("API_SERVER_KEY") and not any(line.startswith("API_SERVER_KEY=") and len(line) > len("API_SERVER_KEY=") for line in lines):
@@ -207,7 +304,7 @@ def seed_home(env):
 
     if (HERMES_HOME / "config.yaml").exists():
         run_quiet([sys.executable, str(HERMES_DIR / "scripts/docker_config_migrate.py")], env, "docker_config_migrate")
-    # Opts out of shared metrics only while the panel question is unanswered.
+    # Shared metrics stay off until the panel question is answered.
     consent = (
         "from hermes_cli.config import read_raw_config\n"
         "from hermes_cli.observability.shared_metrics_consent import consent_state, save_consent\n"
@@ -219,7 +316,7 @@ def seed_home(env):
 
 
 def pair_whatsapp(env, children, paired):
-    """Pairing by QR: the bridge prints it to stdout, so it shows in the app log. The session is saved in /app/.hermes, then the gateway restarts."""
+    """Pairs by QR printed to stdout (the app log); the gateway restarts when the session is saved."""
     bridge = HERMES_DIR / "scripts" / "whatsapp-bridge"
     npm_env = dict(env, npm_config_cache=str(APP / ".cache" / "npm"))
     for attempt in (1, 2, 3):
@@ -242,57 +339,33 @@ def pair_whatsapp(env, children, paired):
         log("WhatsApp was not paired (QR expired or closed); restart the app to get a new QR")
 
 
-class Placeholder(http.server.BaseHTTPRequestHandler):
-    """Public port when the WebUI is off: a health check and a note, nothing else."""
-
-    def do_GET(self):
-        ok = self.path.split("?")[0] == "/health"
-        body = b'{"status":"ok"}' if ok else b"Hermes Agent is running. The browser chat is off (webui=false); talk to it through its channels.\n"
-        self.send_response(200 if ok else 404)
-        self.send_header("Content-Type", "application/json" if ok else "text/plain; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def log_message(self, *args):
-        pass
-
-
 def main():
-    # The password becomes a hash and the process is replaced by a copy without it (unsetting would leave it in /proc/<pid>/environ).
+    # The password becomes Caddy's bcrypt hash and the process is re-executed without it (unsetting would leave it in /proc/<pid>/environ).
     password = os.environ.get(PASSWORD_VAR)
     if password is not None:
-        if truthy(os.environ.get("HERMES_WEBUI")):
-            if not password:
-                log(f"{PASSWORD_VAR} is empty")
-                sys.exit(64)
-            seed_webui_password(password)
+        if not password:
+            log(f"{PASSWORD_VAR} is empty")
+            sys.exit(64)
+        fetch_caddy()
+        hashed = subprocess.run([str(CADDY_DIR / "caddy"), "hash-password"], input=f"{password}\n{password}\n", capture_output=True, text=True)
+        if hashed.returncode != 0 or not hashed.stdout.strip():
+            log("caddy hash-password failed")
+            sys.exit(70)
         env = {k: v for k, v in os.environ.items() if k != PASSWORD_VAR}
+        env[HASH_VAR] = hashed.stdout.strip()
         os.execve(sys.executable, [sys.executable, "-u", os.path.abspath(__file__)], env)
 
     env = dict(os.environ)
-    # PIP_NO_DEPS only serves the template's install; packages the agent installs later need their dependencies.
-    env.pop("PIP_NO_DEPS", None)
-    webui = truthy(env.get("HERMES_WEBUI"))
-    if webui and not has_webui_password():
-        log(f"{PASSWORD_VAR} is required for the browser chat")
+    caddy_hash = env.pop(HASH_VAR, "")
+    if not caddy_hash:
+        log(f"{PASSWORD_VAR} is required")
         sys.exit(64)
-
-    HERMES_HOME.mkdir(parents=True, exist_ok=True)
-    fetch_github(HERMES, HERMES_DIR, HERMES_SKIP)
-    if webui:
-        fetch_github(WEBUI, WEBUI_DIR, WEBUI_SKIP)
+    webui = truthy(env.get("HERMES_WEBUI"))
     whatsapp = truthy(env.get("WHATSAPP_ENABLED"))
-    if whatsapp:
-        fetch_node()
-    shutil.rmtree(APP / ".cache" / "vertra" / "sources", ignore_errors=True)
-    os.umask(0o077)
-    env["PYTHONPATH"] = os.pathsep.join(p for p in (str(HERMES_DIR), env.get("PYTHONPATH")) if p)
-    env.update({"HERMES_HOME": str(HERMES_HOME), "HERMES_WRITE_SAFE_ROOT": str(APP), "HERMES_GATEWAY_NO_SUPERVISE": "1", "PYTHONDONTWRITEBYTECODE": "1"})
-    seed_home(env)
 
-    # If one process exits, all stop and the app restarts.
-    procs, children = [], []   # children: the pairing bridge, whose exit is not a failure
+    os.umask(0o077)
+
+    procs, children = [], []   # if a proc exits all stop; children (the pairing bridge) may exit
 
     def stop_all(*_):
         everyone = procs + children
@@ -313,41 +386,52 @@ def main():
     signal.signal(signal.SIGTERM, on_signal)
     signal.signal(signal.SIGINT, on_signal)
 
-    # Node reaches only the Hermes processes, and only with WhatsApp on.
-    node_env = dict(env)
-    if whatsapp:
-        node_env["VERTRA_NODE_BIN"] = str(NODE_DIR / "bin")
-        node_env["PATH"] = f"{NODE_DIR / 'bin'}{os.pathsep}{env.get('PATH', '')}"
+    # Caddy first, so /healthz answers during the downloads and the dashboard build.
+    cookie = "Path=/; HttpOnly; SameSite=Strict" + ("; Secure" if env.get("PUBLIC_ORIGIN", "").startswith("https://") else "")
+    caddy_env = {"PATH": env.get("PATH", ""), "ADMIN_USER": env.get("HERMES_ADMIN_USER") or "admin", "HASH": caddy_hash, "SESSION_TOKEN": os.urandom(32).hex(),
+                 "COOKIE_ATTRS": cookie, "XDG_DATA_HOME": str(APP / ".cache" / "caddy-data"), "XDG_CONFIG_HOME": str(APP / ".cache" / "caddy-config")}
+    procs.append(subprocess.Popen([str(CADDY_DIR / "caddy"), "run", "--config", str(write_caddyfile(webui)), "--adapter", "caddyfile"], env=caddy_env))
 
-    def start_gateway():
-        # Exits with code 1 if another gateway already runs on the same /app.
-        return subprocess.Popen([sys.executable, str(Path(__file__).with_name("hermes_run.py")), "gateway", "run"], env=node_env, cwd=HERMES_HOME)
+    HERMES_HOME.mkdir(parents=True, exist_ok=True)
+    fetch_github(HERMES, HERMES_DIR, HERMES_SKIP)
+    if webui:
+        fetch_github(WEBUI, WEBUI_DIR, WEBUI_SKIP)
+    fetch_node()
 
-    gateway = start_gateway()
+    env["PYTHONPATH"] = os.pathsep.join(p for p in (str(HERMES_DIR), env.get("PYTHONPATH")) if p)
+    env.update({"HERMES_HOME": str(HERMES_HOME), "HERMES_WRITE_SAFE_ROOT": str(APP), "HERMES_GATEWAY_NO_SUPERVISE": "1", "PYTHONDONTWRITEBYTECODE": "1"})
+    # Node only for the gateway and the dashboard.
+    node_env = dict(env, VERTRA_NODE_BIN=str(NODE_DIR / "bin"), PATH=f"{NODE_DIR / 'bin'}{os.pathsep}{env.get('PATH', '')}")
+
+    built = build_frontends(node_env)
+    seed_home(env)
+
+    def start_hermes(*args, extra=None):
+        return subprocess.Popen([sys.executable, str(Path(__file__).with_name("hermes_run.py")), *args], env=dict(node_env, **(extra or {})), cwd=HERMES_HOME)
+
+    gateway = start_hermes("gateway", "run")
     procs.append(gateway)
+    if built:
+        procs.append(start_hermes("dashboard", "--host", "127.0.0.1", "--port", "9119", "--no-open", "--skip-build",
+                                  extra={"HERMES_WEB_DIST": str(WEB_DIST), "HERMES_TUI_DIR": str(TUI_DIR)}))
     paired = threading.Event()
     if whatsapp and not (WA_SESSION / "creds.json").exists():
         threading.Thread(target=pair_whatsapp, args=(node_env, children, paired), daemon=True).start()
     if webui:
         web_env = dict(env)
         web_env.update({
-            "HERMES_WEBUI_HOST": "0.0.0.0", "HERMES_WEBUI_PORT": str(PORT), "HERMES_WEBUI_AGENT_DIR": str(HERMES_DIR), "HERMES_WEBUI_PYTHON": sys.executable,
+            "HERMES_WEBUI_HOST": "127.0.0.1", "HERMES_WEBUI_PORT": "8787", "HERMES_WEBUI_AGENT_DIR": str(HERMES_DIR), "HERMES_WEBUI_PYTHON": sys.executable,
             "HERMES_WEBUI_STATE_DIR": str(STATE_DIR), "HERMES_WEBUI_DEFAULT_WORKSPACE": str(HERMES_HOME / "workspace"), "HERMES_WEBUI_SKIP_ONBOARDING": "1",
-            "HERMES_WEBUI_TRUST_FORWARDED_HOST": "1", "HERMES_WEBUI_TRUST_FORWARDED_PROTO": "1",
+            "HERMES_WEBUI_TRUST_FORWARDED_HOST": "1", "HERMES_WEBUI_TRUST_FORWARDED_PROTO": "1", "HERMES_WEBUI_TRUST_FORWARDED_FOR": "1",
         })
-        web_env.pop("HERMES_WEBUI_PASSWORD", None)  # would override the stored hash
+        web_env.pop("HERMES_WEBUI_PASSWORD", None)
         if env.get("PUBLIC_ORIGIN"):
             web_env["HERMES_WEBUI_ALLOWED_ORIGINS"] = env["PUBLIC_ORIGIN"]
-            if env["PUBLIC_ORIGIN"].startswith("https://"):
-                web_env["HERMES_WEBUI_SECURE"] = "1"  # the session cookie carries Secure
         procs.append(subprocess.Popen([sys.executable, "server.py"], env=web_env, cwd=WEBUI_DIR))
-    else:
-        server = http.server.ThreadingHTTPServer(("0.0.0.0", PORT), Placeholder)
-        threading.Thread(target=server.serve_forever, daemon=True).start()
 
     while True:
         if paired.is_set():
-            # The gateway only starts the WhatsApp bridge when it finds the session at its own start.
+            # The gateway starts the bridge only if the session exists when it starts.
             paired.clear()
             log("WhatsApp paired; restarting the gateway")
             gateway.terminate()
@@ -356,7 +440,7 @@ def main():
             except subprocess.TimeoutExpired:
                 gateway.kill()
             procs.remove(gateway)
-            gateway = start_gateway()
+            gateway = start_hermes("gateway", "run")
             procs.insert(0, gateway)
         for p in procs:
             code = p.poll()
