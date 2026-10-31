@@ -105,6 +105,9 @@ function decodeEntities(text) {
 function svgProblem(text) {
   if (!/<svg[\s>]/i.test(text)) return "is not an SVG";
   if (/<!(?:DOCTYPE|ENTITY)/i.test(text) || /<\?xml-stylesheet/i.test(text)) return "has a DOCTYPE, entities or a stylesheet reference";
+  // Comments are stripped before the element check, so every form an XML or HTML parser reads differently is refused:
+  // CDATA, the HTML-only `--!>`, `<!-->` and `<!--->` endings, and `<` inside an attribute value (invalid XML anyway).
+  if (/<!\[CDATA\[/i.test(text) || /--!>|<!---?>/.test(text) || /=\s*(?:"[^"]*<|'[^']*<)/.test(text)) return "has a CDATA section, a malformed comment or `<` in an attribute";
   const markup = text.replace(/<!--[\s\S]*?-->/g, "");
   for (const [, prefix = "", name] of markup.matchAll(/<\s*([A-Za-z_][\w.-]*:)?([A-Za-z_][\w.-]*)/g)) {
     if (!SVG_ELEMENTS.has(name)) return `has the element <${prefix}${name}>, which is not allowed`;
