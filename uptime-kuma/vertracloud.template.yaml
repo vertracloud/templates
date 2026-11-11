@@ -1,5 +1,5 @@
 id: uptime-kuma
-version: 1.0.0
+version: 1.0.1
 name: { pt-br: Uptime Kuma, en: Uptime Kuma, es: Uptime Kuma }
 description:
   pt-br: Monitoramento de sites e serviços com alertas e página de status. Seus dados no seu app.
