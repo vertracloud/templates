@@ -5,7 +5,8 @@
 FROM louislam/uptime-kuma:2-slim@sha256:3e0ae13fa92d0a1108b7e4133eaa25b2bc4e26d2f5d8691a5cb01ee1fe5c95f1
 
 USER root
-RUN mv /app /opt/uptime-kuma && mkdir /app && chown 1000:1000 /app
+# /opt/vertra is created here with 0755: `COPY --chmod=0644` into a missing folder creates the folder with 0644 too, and uid 1000 cannot enter it.
+RUN mv /app /opt/uptime-kuma && mkdir /app && chown 1000:1000 /app && mkdir -m 0755 /opt/vertra
 # `ping` ships with a file capability (cap_net_raw=ep) and fails under cap-drop ALL; copying it through `cat` drops the attribute.
 RUN cat /usr/bin/ping > /tmp/ping.nocap && chmod 0755 /tmp/ping.nocap && mv -f /tmp/ping.nocap /usr/bin/ping
 COPY --chown=0:0 --chmod=0644 vertra-start.cjs /opt/vertra/vertra-start.cjs
