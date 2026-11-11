@@ -45,6 +45,19 @@ async function connect(port) {
   const url = `${base}&sid=${encodeURIComponent(sid)}`;
   const c = await request(port, 'POST', url, '40');
   if (c.status !== 200) throw new Error(`connect ${c.status}`);
+  // Kuma registers its event handlers only after `await sendInfo(socket)` in the connection handler, and an event that
+  // arrives before that is dropped without an answer. The `info` event is the end of sendInfo: wait for it before emitting.
+  const ready = Date.now() + 30000;
+  let gotInfo = false;
+  while (!gotInfo && Date.now() < ready) {
+    const poll = await request(port, 'GET', url);
+    if (poll.status !== 200) throw new Error(`poll ${poll.status}`);
+    for (const packet of poll.text.split(SEP)) {
+      if (packet === '2') await request(port, 'POST', url, '3');
+      if (packet.startsWith('42["info"')) gotInfo = true;
+    }
+  }
+  if (!gotInfo) throw new Error('Kuma did not send its info event');
   let ackId = 0;
   return {
     async emit(event, ...args) {
