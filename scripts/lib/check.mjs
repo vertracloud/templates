@@ -5,7 +5,7 @@
 import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { UserPlanName } from "@vertracloud/api-types/v1";
+import { PlanName } from "@vertracloud/api-types/v1";
 import Ajv from "ajv";
 import yaml from "js-yaml";
 
@@ -44,8 +44,8 @@ function validator() {
   return schemaValidator;
 }
 
-/** Plan slugs of the catalog (`UserPlanName` of the api-types package). */
-export const PLAN_SLUGS = Object.values(UserPlanName);
+/** Plan slugs of the catalog (`PlanName` of the api-types package). */
+export const PLAN_SLUGS = Object.values(PlanName);
 
 /** Parses `{{ ... }}`; `null` = malformed or unknown. */
 export function parsePlaceholder(expression) {
@@ -442,6 +442,6 @@ function checkDockerfile(rel, abs, err, warn) {
   // Last stage only: the last `USER` instruction decides who runs the image.
   const lastStage = text.split(/^\s*FROM\s/im).pop() ?? "";
   const users = [...lastStage.matchAll(/^\s*USER\s+(\S+)/gim)].map((x) => x[1]);
-  if (users.length > 0 && /^(root|0)(:|$)/.test(users[users.length - 1])) err(rel, "the last stage must not end as root: finish with `USER 1000:1000` (the platform runs images as uid 1000)");
-  if (!/^\s*USER\s+1000(?::1000)?\s*$/im.test(text)) warn(rel, "no `USER 1000:1000` (the platform runs the image as uid 1000 anyway)");
+  if (users.length > 0 && /^(root|0)(:|$)/.test(users[users.length - 1])) err(rel, "the last stage must not end as root: finish with `USER 9999:9999` (the platform runs images as uid 9999)");
+  if (!/^\s*USER\s+9999(?::9999)?\s*$/im.test(text)) warn(rel, "no `USER 9999:9999` (the platform runs the image as uid 9999 anyway)");
 }
