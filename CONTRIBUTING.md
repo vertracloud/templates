@@ -20,9 +20,9 @@ Fork the repository and add a folder named after the template id (lowercase lett
 | `icon.svg` (or `icon.png`) | SVG up to 64 KB with no scripts, `<image>`, `<use>` or external references; PNG up to 256 KB. Use your own drawing, or the project's official logo **only** if its brand rules allow it, unmodified; write the origin and the rule in `ICONS.md`. |
 | `release.yaml` (optional) | `security: true`, `changelog` (pt-br, en, es, up to 2000 characters), `author` (up to 80). |
 
-Rules the validator enforces: no secret in `env` (use `{{secret:<n>}}`, `secrets` or a `secret` question), no `NODE_OPTIONS`, `LD_*`, `PORT`, `HOME`, `PATH`... in `env` (put what an image needs in the Dockerfile `ENV`), placeholders that point to a service or question that exists, `when` conditions that refer to an earlier question, `min_plan` as a real plan slug, `links.license` declared, every `FROM` pinned by digest, the image finishes as uid 1000, no `.env*` and no `.vertra/` in the folder.
+Rules the validator enforces: no secret in `env` (use `{{secret:<n>}}`, `secrets` or a `secret` question), no `NODE_OPTIONS`, `LD_*`, `PORT`, `HOME`, `PATH`... in `env` (put what an image needs in the Dockerfile `ENV`), placeholders that point to a service or question that exists, `when` conditions that refer to an earlier question, `min_plan` as a real plan slug, `links.license` declared, every `FROM` pinned by digest, the image finishes as uid 9999, no `.env*` and no `.vertra/` in the folder.
 
-Platform facts worth knowing before you write the manifest: the root file system is read-only and `/app` (a volume) is the only persistent disk; the app runs as uid 1000 with all capabilities dropped and `no-new-privileges`; **a binary with a file capability fails to exec** (copy it with `cat > file`); the build needs network only for registries and sources you name.
+Platform facts worth knowing before you write the manifest: the app runs as uid 9999 with all capabilities dropped and `no-new-privileges`; it writes only to `/app` (the persistent volume); **a binary with a file capability fails to exec** (copy it with `cat > file`); the build needs network only for registries and sources you name.
 
 ### 2. Validate and test before the pull request
 ```bash
@@ -74,9 +74,9 @@ Faça um fork e crie uma pasta com o id do template (letras minúsculas, dígito
 | `icon.svg` (ou `icon.png`) | SVG até 64 KB, sem scripts, `<image>`, `<use>` nem referências externas; PNG até 256 KB. Use um desenho seu, ou o logo oficial do projeto **só** se as regras de marca permitirem, sem alterações; registre a origem e a regra no `ICONS.md`. |
 | `release.yaml` (opcional) | `security: true`, `changelog` (pt-br, en, es, até 2000 caracteres), `author` (até 80). |
 
-Regras que o validador aplica: nenhum segredo no `env` (use `{{secret:<n>}}`, `secrets` ou uma pergunta `secret`), sem `NODE_OPTIONS`, `LD_*`, `PORT`, `HOME`, `PATH`... no `env` (o que a imagem precisa vai no `ENV` do Dockerfile), placeholders que apontam para serviço ou pergunta que existe, `when` que cita uma pergunta anterior, `min_plan` com slug de plano real, `links.license` declarado, todo `FROM` fixado por digest, a imagem termina como uid 1000, sem `.env*` nem `.vertra/` na pasta.
+Regras que o validador aplica: nenhum segredo no `env` (use `{{secret:<n>}}`, `secrets` ou uma pergunta `secret`), sem `NODE_OPTIONS`, `LD_*`, `PORT`, `HOME`, `PATH`... no `env` (o que a imagem precisa vai no `ENV` do Dockerfile), placeholders que apontam para serviço ou pergunta que existe, `when` que cita uma pergunta anterior, `min_plan` com slug de plano real, `links.license` declarado, todo `FROM` fixado por digest, a imagem termina como uid 9999, sem `.env*` nem `.vertra/` na pasta.
 
-O que vale saber da plataforma antes de escrever o manifesto: a raiz é somente leitura e o `/app` (um volume) é o único disco persistente; o app roda como uid 1000 sem capabilities e com `no-new-privileges`; **binário com file capability não executa** (copie-o com `cat > arquivo`); o build só precisa de rede para os registros e fontes que você citar.
+O que vale saber da plataforma antes de escrever o manifesto: o app roda como uid 9999 sem capabilities e com `no-new-privileges`; grava só em `/app` (o volume persistente); **binário com file capability não executa** (copie-o com `cat > arquivo`); o build só precisa de rede para os registros e fontes que você citar.
 
 ### 2. Validar e testar antes do PR
 ```bash

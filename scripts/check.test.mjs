@@ -14,7 +14,7 @@ test("every template folder of the repository is valid", () => {
   }
 });
 
-function mutated(template, edit, path = "vertracloud.template.yaml") {
+function mutatedResult(template, edit, path = "vertracloud.template.yaml") {
   const tmp = mkdtempSync(join(tmpdir(), "tpl-"));
   const dir = join(tmp, template);
   cpSync(join(ROOT, template), dir, { recursive: true });
@@ -22,7 +22,11 @@ function mutated(template, edit, path = "vertracloud.template.yaml") {
   writeFileSync(file, edit(readFileSync(file, "utf8")));
   const result = checkTemplate(dir);
   rmSync(tmp, { recursive: true, force: true });
-  return result.errors.join("\n");
+  return result;
+}
+
+function mutated(template, edit, path) {
+  return mutatedResult(template, edit, path).errors.join("\n");
 }
 
 test("an unknown placeholder fails", () => {
@@ -34,7 +38,7 @@ test("NODE_OPTIONS in env fails", () => {
 });
 
 test("an unknown plan slug fails", () => {
-  assert.match(mutated("uptime-kuma", (s) => s.replace("services:", "min_plan: business-12\nservices:")), /not a plan slug/);
+  assert.match(mutated("uptime-kuma", (s) => s.replace("services:", "min_plan: business-13\nservices:")), /not a plan slug/);
 });
 
 test("a literal secret fails", () => {
@@ -82,4 +86,19 @@ test("placeholder grammar", () => {
   assert.deepEqual(parsePlaceholder("secret:32"), { kind: "secret" });
   assert.deepEqual(parsePlaceholder("services.db.ssl.ca_path"), { kind: "service", id: "db", field: "ssl.ca_path" });
   assert.equal(parsePlaceholder("nope.x"), null);
+});
+
+test("a Dockerfile must not finish as root and should finish as uid 9999", () => {
+  const edit = (replacement) => (s) => s.replace(/^USER 9999:9999\s*$/m, replacement);
+  assert.match(mutated("uptime-kuma", edit("USER root"), "docker/Dockerfile"), /finish with `USER 9999:9999`/);
+  const legacy = mutatedResult("uptime-kuma", edit("USER 1000:1000"), "docker/Dockerfile");
+  assert.deepEqual(legacy.errors, []);
+  assert.match(legacy.warnings.join("\n"), /no `USER 9999:9999`/);
+});
+
+test("the Dockerfiles shipped here finish as uid 9999", () => {
+  for (const dir of templateFolders().filter((d) => /uptime-kuma|open-webui|evolution-api/.test(d))) {
+    const { warnings } = checkTemplate(dir);
+    assert.ok(!warnings.some((w) => /USER 9999/.test(w)), `${dir}: ${warnings.join("; ")}`);
+  }
 });

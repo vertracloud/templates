@@ -1,5 +1,5 @@
 id: evolution-api
-version: 1.0.0
+version: 1.0.1
 name: { pt-br: Evolution API, en: Evolution API, es: Evolution API }
 description:
   pt-br: API de WhatsApp com instâncias, webhooks e integrações. Postgres incluso.

@@ -4,10 +4,10 @@
 FROM ghcr.io/open-webui/open-webui:v0.12.4-slim@sha256:41812075aede8ada8497cb2b71c76412978633eee72775bb77796f593d03b677
 
 USER root
-RUN mv /app /opt/open-webui && mkdir /app && chown 1000:1000 /app
+RUN mv /app /opt/open-webui && mkdir /app && chown 9999:9999 /app
 COPY --chown=0:0 --chmod=0644 LICENSE /opt/open-webui/LICENSE
 COPY --chown=0:0 --chmod=0755 start-vertra.sh /opt/start-vertra.sh
-USER 1000:1000
+USER 9999:9999
 
 ENV HOME=/app \
     DATA_DIR=/app/data \

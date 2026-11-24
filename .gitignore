@@ -4,3 +4,7 @@ dist/
 # packages never carry secrets
 .env
 .env.*
+# agent guidance stays local
+AGENTS.md
+CLAUDE.md
+.claude/
