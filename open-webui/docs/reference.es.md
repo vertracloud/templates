@@ -18,7 +18,7 @@
 
 - RAM: 512 MB (mínimo) / 1024 MB (recomendado); Postgres 1024 MB cuando se elige.
 - Puerto 8080; healthcheck en `/health` (200 `{"status":true}`), hasta 180 s.
-- Disco: el programa queda en `/opt/open-webui` (solo lectura); datos en `/app/data`.
+- Disco: el programa queda en `/opt/open-webui` (la app no escribe ahí); datos en `/app/data`.
 
 ## Problemas comunes
 

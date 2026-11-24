@@ -1,7 +1,7 @@
 # License: BSD-3 with a branding clause (https://github.com/open-webui/open-webui/blob/main/LICENSE): the "Open WebUI" brand cannot be
 # changed or removed except for up to 50 end users in 30 days, written permission or an enterprise license. This template keeps the brand.
 id: open-webui
-version: 1.0.0
+version: 1.0.1
 name: { pt-br: Open WebUI, en: Open WebUI, es: Open WebUI }
 description:
   pt-br: Interface de chat com IA para a sua equipe. Você traz a chave do modelo.

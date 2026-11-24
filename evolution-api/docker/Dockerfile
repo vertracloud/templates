@@ -15,4 +15,5 @@ COPY entrypoint.sh /evolution/vertra-entrypoint.sh
 COPY vertra-tls-client-cert.cjs /evolution/vertra-tls-client-cert.cjs
 # The preload is a no-op unless VERTRA_TLS_CLIENT_HOST/CERT/KEY are set.
 ENV NODE_OPTIONS="--require /evolution/vertra-tls-client-cert.cjs"
+USER 9999:9999
 ENTRYPOINT ["/bin/bash", "/evolution/vertra-entrypoint.sh"]
